@@ -47,6 +47,8 @@ class GeneRegistry:
 
     def update_from_reviewed_node(self, node: Node) -> None:
         """Update registry using a reviewed node's pheromone."""
+        from utils.logger_system import log_msg
+
         pheromone_value = getattr(node, "pheromone_node", None)
         if pheromone_value is None and node.metadata:
             pheromone_value = node.metadata.get("pheromone_node")
@@ -56,6 +58,14 @@ class GeneRegistry:
             return
         for locus in _LOCUS_NAMES:
             gene_content = node.genes.get(locus) if node.genes else None
+
+            # 临时验证点 A：GeneRegistry 是否真的读到 gene
+            log_msg(
+                "DEBUG",
+                f"[GENE-REGISTRY] node={node.id[:6]} locus={locus} "
+                f"len={len(gene_content) if gene_content else 0}"
+            )
+            
             if not gene_content:
                 continue
             normalized = normalize_gene_text(gene_content)
@@ -75,7 +85,7 @@ class GeneRegistry:
             )
             entry["acc_sum"] += float(pheromone_value)
             entry["count"] += 1
-            entry["pheromone"] = max(entry["acc_sum"] / entry["count"], 1e-9)
+            entry["pheromone"] = entry["acc_sum"] / entry["count"]
             entry["last_seen_step"] = node.step
             entry["content"] = gene_content
             entry["source_node_id"] = node.id

@@ -1,14 +1,17 @@
 import asyncio
 import time
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 import uuid
 from core.execution.pipeline import Pipeline
 from core.agent.agent_pool import AgentPool
 from core.agent.base_agent import BaseReActAgent
 from core.execution.journal import Journal, Node
 from core.agent.prompt_manager import PromptContext
+from core.evolution.gene_selector import select_gene_plan
+from core.evolution.gene_registry import GeneRegistry
 from utils.logger_system import log_msg
+from core.execution.task_class import Task
 
 class IterationController:
     def __init__(
@@ -27,6 +30,11 @@ class IterationController:
 
         self.current_epoch = 0
         self.start_time = time.time()
+        self.use_pheromone_gene_selection = config.use_pheromone_gene_selection
+        self.gene_registry = GeneRegistry()
+        self._gene_registry_updated_nodes: Set[str] = set()
+
+
 
     async def run_competition(self):
         log_msg("INFO", "Starting competition loop...")
@@ -63,7 +71,6 @@ class IterationController:
 
         log_msg("INFO", f"Epoch {self.current_epoch}: 轮询完成")
 
-
     async def _run_single_task(self, agent: BaseReActAgent, task: Dict[str, Any]):
         """
         Execute a single task with a specific agent.
@@ -71,63 +78,45 @@ class IterationController:
         task_id = task['id']
         task_type = task['type']
         log_msg("INFO", f"Agent {agent.name} starting task {task_id} ({task_type})")
-        
-        # 1. 准备上下文 (Merge 任务需要先获取 gene_plan)
-        if task_type == 'merge':
-            source_id = task.get('dependencies', {}).get('gene_plan_source')
-            if source_id:
-                gene_plan = self.task_pipeline.retrieve_result(source_id, pop=True)
-                if gene_plan:
-                    task['payload']['gene_plan'] = gene_plan
-                else:
-                    log_msg("WARNING", f"Merge task {task_id} missing gene_plan from {source_id}")
 
+        # ---- 初始化----
+        result_nodes = []
+        update_data = None
+
+        # =====================================================
+        # 1.MERGE 任务：在调用 LLM 之前完成“决策层工作”
+        # =====================================================
+        if task_type == 'merge':
+            payload = task['payload']
+
+            # ---- merge -- gene selection ----
+            gene_plan = self._maybe_compute_gene_plan(task)
+            payload['gene_plan'] = gene_plan  # 允许为 None（一般不会为none）
+
+            if gene_plan is None:
+                log_msg(
+                    "WARNING",
+                    f"[MERGE] Task {task_id} running without gene_plan (fallback merge)"
+                )
+
+        # =====================================================
+        # 2.构造 PromptContext
+        # =====================================================
         prompt_context = self._construct_prompt_context(task)
-        
         task_description = self._get_task_description(task)
-        
+
         agent_input_state = {
             "task_description": task_description,
             "prompt_context": prompt_context
         }
 
+        # =====================================================
+        # 3.调用 LLM / 执行任务
+        # =====================================================
         try:
             result = await agent(agent_input_state)
-            
-            # 2. 根据任务类型处理结果
-            result_nodes = []
-            update_data = None
-
-            if task_type == 'select':
-                # Select 任务: 暂存结果，创建 Merge 任务
-                agent_output = result.get('agent_output', {})
-                gene_plan = agent_output 
-                
-                # 暂存 Plan
-                self.task_pipeline.store_result(task_id, gene_plan)
-                
-                # 创建 Merge 任务
-                merge_payload = {
-                    "candidate_ids": task['payload'].get('candidate_ids', [])
-                }
-                
-                # 手动构建 Merge 任务并优先添加
-                merge_task = {
-                    "id": str(uuid.uuid4()),
-                    "type": "merge",
-                    "priority": 0, # Merge 优先
-                    "payload": merge_payload,
-                    "status": "pending",
-                    "created_at": time.time(),
-                    "agent_name": None,
-                    "dependencies": {"gene_plan_source": task_id}
-                }
-                
-                self.task_pipeline.add_urgent_task(merge_task)
-                log_msg("INFO", f"Select task finished. Merge task {merge_task['id']} created.")
-
-            elif task_type == 'review':
-                # Review 任务: 准备更新数据传给 Pipeline
+            # ---- REVIEW ----
+            if task_type == 'review':
                 target_id = task['payload'].get('target_node_id')
                 if target_id:
                     agent_output = result.get('agent_output', {})
@@ -138,26 +127,95 @@ class IterationController:
                         "agent_success": result.get('agent_success')
                     }
                 else:
-                     log_msg("WARNING", f"Review task target node {target_id} not found.")
+                    log_msg("WARNING", f"Review task target node {target_id} not found.")
 
+            # ---- MERGE / EXPLORE ----
+             # Explore / Merge 任务: 创建新 Node 对象但不直接添加
             else:
-                # Explore / Merge 任务: 创建新 Node 对象但不直接添加
                 result_nodes = self._create_nodes_from_result(result, task)
-                # self.journal.add_node(result_node) -> 移交给 pipeline
-                
-                log_msg("INFO", f"Agent {agent.name} finished task {task_id}. Generated {len(result_nodes)} Nodes: {[n.id for n in result_nodes]}")
+                log_msg(
+                    "INFO",
+                    f"Agent {agent.name} finished task {task_id}. "
+                    f"Generated {len(result_nodes)} Nodes: {[n.id for n in result_nodes]}"
+                )
 
-            # 3. 完成任务，并将结果传递给 Pipeline 处理 (Journal 更新, 后续任务触发)
+        # =================================================
+        # 4.通知 Pipeline：任务完成
+        # =================================================
+            # 完成任务，并将结果传递给 Pipeline 处理 (Journal 更新, 后续任务触发)
             self.task_pipeline.complete_task(
                 task_id=task_id,
-                result_nodes=result_nodes if result_nodes else [], # Pass list of nodes
+                result_nodes=result_nodes,
                 update_data=update_data
             )
-            
+
         except Exception as e:
             log_msg("ERROR", f"Agent {agent.name} failed task {task_id}: {e}")
             import traceback
             log_msg("ERROR", traceback.format_exc())
+
+
+    def _maybe_compute_gene_plan(self, task: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not self.use_pheromone_gene_selection:
+            return None
+        log_msg("INFO", "[GENE-SELECT] Using pheromone + max-sim selection")
+        
+        try:
+            self._update_gene_registry_from_journal()
+            # 直接调用 gene_selector
+            gene_plan = select_gene_plan(
+                journal=self.journal,
+                gene_registry=self.gene_registry,
+                current_step=self.current_epoch,
+            )
+            self._log_gene_plan(gene_plan)
+            return gene_plan
+
+        except Exception as exc:
+            import traceback
+
+            log_msg(
+                "WARNING",
+                "Pheromone gene selection failed.\n"
+                f"Exception: {exc}\n"
+                f"Traceback:\n{traceback.format_exc()}"
+            )
+            return None
+
+    def _log_gene_plan(self, gene_plan: Dict[str, Any]) -> None:
+        parts = []
+        labels = [
+            ("data", "data_source"),
+            ("model", "model_source"),
+            ("loss", "loss_source"),
+            ("opt", "optimizer_source"),
+            ("reg", "regularization_source"),
+            ("init", "initialization_source"),
+            ("tricks", "tricks_source"),
+        ]
+        for label, field in labels:
+            spec = gene_plan.get(field)
+            if isinstance(spec, dict):
+                node_id = spec.get("source_node_id", "")
+                gene_id = spec.get("gene_id", "")
+                display = f"{node_id[:6]}:{gene_id[:6]}"
+            else:
+                display = "None"
+            parts.append(f"{label}={display}")
+        log_msg("INFO", "[GENE-PLAN] " + " ".join(parts))
+
+
+    def _update_gene_registry_from_journal(self) -> None:
+        for node_id, node in self.journal.nodes.items():
+            if node_id in self._gene_registry_updated_nodes:
+                continue
+            pheromone = None
+            if node.metadata:
+                pheromone = node.metadata.get("pheromone_node")
+            if pheromone is None:
+                continue
+            self.gene_registry.update_from_reviewed_node(node)
+            self._gene_registry_updated_nodes.add(node_id)
 
     def _construct_prompt_context(self, task: Dict[str, Any]) -> PromptContext:
         """
@@ -171,8 +229,8 @@ class IterationController:
         if payload.get('template_name') == None:
             if task['type'] == 'review':
                 payload['template_name']  = "evaluate_user_prompt.j2"
-            elif task['type'] == 'select':
-                payload['template_name']  = "select_user_prompt.j2"
+            # elif task['type'] == 'select':
+            #     payload['template_name']  = "select_user_prompt.j2"
             elif task['type'] == 'merge':
                 payload['template_name']  = "merge_user_prompt.j2"
             else:
@@ -188,31 +246,18 @@ class IterationController:
                         payload['parent_code'] = parent_node.code
                         payload['parent_feedback'] = parent_node.summary
                         # logs 对应模板中的 parent_history
-                        execution_logs = parent_node.logs
+                        payload['parent_history'] = parent_node.logs
                         payload['parent_score'] = parent_node.score
         
         # 动态填充数据
-        candidates_data = {}
+        #candidates_data = {}
         gene_plan_data = {}
         solution_code = None
         execution_logs = None
 
-        if task['type'] == 'select':
-            # 获取最近 N=4 个节点作为 Candidates
-            recent_nodes = list(self.journal.nodes.values())[-4:]
-            candidates_data = {n.id: n.code for n in recent_nodes if n.code}
-            # 同时更新 Payload 以便后续传递 ID
-            payload['candidate_ids'] = list(candidates_data.keys())
+    
         
-        elif task['type'] == 'merge':
-            # 从 Journal 获取 Candidates
-            candidate_ids = payload.get('candidate_ids', [])
-            for cid in candidate_ids:
-                node = self.journal.get_node(cid)
-                if node and node.code:
-                    candidates_data[cid] = node.code
-            
-            # Gene Plan 从 Payload (run_single_task 中注入)
+        if task['type'] == 'merge':
             gene_plan_data = payload.get('gene_plan')
 
         elif task['type'] == 'review':
@@ -237,13 +282,14 @@ class IterationController:
             parent_code=payload.get('parent_code'),
             parent_feedback=payload.get('parent_feedback'),
             parent_score=payload.get('parent_score'),
-            candidates=candidates_data if candidates_data else payload.get('candidates'),
+
             gene_plan=gene_plan_data if gene_plan_data else payload.get('gene_plan'),
             solution_code=solution_code if solution_code else payload.get('solution_code'),
             execution_logs=execution_logs if execution_logs else payload.get('execution_logs'),
+            parent_history=payload.get('parent_history'),
             
             # 显式传递 parent_history (对应 logs)
-            parent_history=execution_logs if task['type'] == 'explore' and execution_logs else None,
+            #parent_history=execution_logs if task['type'] == 'explore' and execution_logs else None,
             
             template_name=payload.get('template_name') 
         )
@@ -254,9 +300,9 @@ class IterationController:
         Prepends competition description as background context.
         """
         t_type = task['type']
-        if t_type == 'select':
-            task_instruction = "Please select the best solution strategy from the candidates."
-        elif t_type == 'explore':
+        # if t_type == 'select':
+        #     task_instruction = "Please select the best solution strategy from the candidates."
+        if t_type == 'explore':
             task_instruction = "Please explore a new solution based on the plan."
         elif t_type == 'merge':
             task_instruction = "Please merge the selected strategies into a new solution."
@@ -283,8 +329,12 @@ class IterationController:
         # Parent handling
         parent_ids = []
         if task['type'] == 'merge':
-             # Merge node parents = All Candidates
-             parent_ids = task['payload'].get('candidate_ids', [])
+            gene_plan = task['payload'].get('gene_plan') or {}
+            parent_ids = list({
+                spec.get("source_node_id")
+                for spec in gene_plan.values()
+                if isinstance(spec, dict) and spec.get("source_node_id")
+            })
         else:
              parent_id = task.get('payload', {}).get('parent_id')
              if parent_id:
@@ -346,7 +396,7 @@ class IterationController:
                                     "agent_name": result.get('agent_name'),
                                     "task_id": task['id'],
                                     "success": result.get('agent_success'),
-                                    "version": "history_snapshot"
+                                    "version": "history_snapshot",
                                 }
                             )
                             nodes.append(node)
@@ -371,7 +421,7 @@ class IterationController:
                         "agent_name": result.get('agent_name'),
                         "task_id": task['id'],
                         "success": result.get('agent_success'),
-                        "version": "final_output"
+                        "version": "final_output",
                     }
                 )
                 nodes.append(node)

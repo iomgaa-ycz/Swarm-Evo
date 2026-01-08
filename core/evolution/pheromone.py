@@ -33,7 +33,7 @@ def _normalize_score(node: Node, score_min: Optional[float], score_max: Optional
     score_range = score_max - score_min
     if score_range <= 0:
         return 0.0
-    return max(0.0, min(1.0, (node.score - score_min) / score_range))
+    return (node.score - score_min) / score_range
 
 
 def compute_node_pheromone(
@@ -52,14 +52,17 @@ def compute_node_pheromone(
     usage_count = 0
     success_count = 0
     if node.metadata:
-        usage_count = int(node.metadata.get("usage_count", 0) or 0)
-        success_count = int(node.metadata.get("success_count", 0) or 0)
+        usage_count = int(node.metadata["usage_count"])
+        success_count = int(node.metadata["success_count"])
     usage_denom = max(1, usage_count)
     success_ratio = success_count / usage_denom
 
-    node_step = getattr(node, "step", 0) or 0
-    step_diff = max(0, current_step - node_step)
+    node_step = int(node.metadata["node_step"])  # node-level step for recency
+    step_diff = current_step - node_step
+    if step_diff < 0:
+        step_diff = 0  # 避免偶发顺序问题
     recency = math.exp(-lambda_ * step_diff)
+
 
     pheromone = alpha * norm_score + beta * success_ratio + delta * recency
     return float(pheromone)

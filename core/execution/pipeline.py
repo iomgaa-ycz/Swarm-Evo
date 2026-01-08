@@ -26,6 +26,8 @@ class Pipeline:
         self.temporary_storage: Dict[str, Any] = {}
         self.journal = journal
         self.config = get_config()
+        # NEW: node-level logical time (for recency)
+        self.current_node_step: int = 0
 
     def initialize(self):
         """
@@ -119,7 +121,7 @@ class Pipeline:
                 payload = {"parent_id": parent_id} if parent_id else {}
                 new_tasks.append(self._create_task(task_type, payload))
             else:
-                task_type = "select"
+                task_type = "merge"
                 new_tasks.append(self._create_task(task_type))
         return new_tasks
 
@@ -134,7 +136,9 @@ class Pipeline:
         if not valid_nodes:
             return None
 
-        current_step = max((n.step for n in self.journal.nodes.values()), default=0)
+        current_step = self.current_node_step
+
+
         score_min = self.journal.score_min
         score_max = self.journal.score_max
 
@@ -142,14 +146,13 @@ class Pipeline:
         for node in valid_nodes:
             ensure_node_stats(node)
             pheromone = node.metadata.get("pheromone_node")
-            if pheromone is None:
-                pheromone = compute_node_pheromone(
-                    node,
-                    current_step=current_step,
-                    score_min=score_min,
-                    score_max=score_max,
-                )
-                node.metadata["pheromone_node"] = pheromone
+            pheromone = compute_node_pheromone(
+                node,
+                current_step=current_step,
+                score_min=score_min,
+                score_max=score_max,
+            )
+            node.metadata["pheromone_node"] = pheromone
             pheromones.append(pheromone)
 
         temperature = 3.0
@@ -160,12 +163,6 @@ class Pipeline:
 
         ensure_node_stats(parent_node)
         parent_node.metadata["usage_count"] += 1
-        parent_node.metadata["pheromone_node"] = compute_node_pheromone(
-            parent_node,
-            current_step=current_step,
-            score_min=score_min,
-            score_max=score_max,
-        )
         log_msg(
             "INFO",
             f"Selected parent {parent_node.id} with pheromone "
@@ -213,9 +210,21 @@ class Pipeline:
             if task['type'] in ['explore', 'merge']:
                 if result_nodes:
                     for node in result_nodes:
+                        
+                        # 1. 递增全局 node 时间
+                        self.current_node_step += 1
+
+                        #  2. 在节点创建时写入 node_step
+                        ensure_node_stats(node)
+                        node.metadata["node_step"] = self.current_node_step
                         self.journal.add_node(node)
                         created_node_ids.append(node.id)
+                        
                         log_msg("INFO", f"Pipeline added Node {node.id} for task {task_id}")
+                        log_msg(
+                            "DEBUG",
+                            f"[GENE-DEBUG] Node {node.id[:6]} genes = {list(node.genes.keys())}"
+                        )
             
             elif task['type'] == 'review':
                 if update_data:
@@ -236,7 +245,7 @@ class Pipeline:
                                     self.journal.score_min = node.score
                                 if self.journal.score_max is None or node.score > self.journal.score_max:
                                     self.journal.score_max = node.score
-                            current_step = max((n.step for n in self.journal.nodes.values()), default=0)
+                            current_step = self.current_node_step
                             node.metadata["pheromone_node"] = compute_node_pheromone(
                                 node,
                                 current_step=current_step,
@@ -273,9 +282,6 @@ class Pipeline:
                     log_msg("WARNING", "Explore task completed without any result nodes. Skipping Review.")
                     return
 
-            elif task['type'] == 'select':
-                # Select -> Merge logic remains in Controller for now.
-                pass 
 
             elif task['type'] == 'merge':
                 next_task_type = 'review'
