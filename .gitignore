@@ -20,3 +20,4 @@ env/
 # Project specific
 CLAUDE.md
 .agent/
+*.pth
