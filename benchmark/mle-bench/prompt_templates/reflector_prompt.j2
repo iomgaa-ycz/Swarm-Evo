@@ -14,17 +14,14 @@ Both prompts are critical to the system's performance and need continuous optimi
 ## Current Prompt Type: {{ prompt_type }}
 
 ## Performance Data:
-- **Total Reviews**: {{ total_reviews }}
-- **Successful Reviews (with scores)**: {{ successful_reviews }}
+- **Execution Count**: {{ used_count }}
 - **Submissions Generated**: {{ submission_count }}
 - **Average Accuracy**: {{ avg_accuracy | round(4) }}
 - **Average Generation Rate**: {{ avg_generation_rate | round(4) }}
-- **Success Rate**: {{ success_rate | round(4) }}
 
 ## Metric Definitions:
-- **Average Accuracy**: Mean validation score across all successful reviews
+- **Average Accuracy**: Mean validation score across all reviews
 - **Average Generation Rate**: Proportion of attempts that generated a submission file
-- **Success Rate**: Proportion of reviews that obtained a valid score
 
 # Current Prompt Content
 ```jinja2
@@ -51,7 +48,6 @@ Analyze the metrics above and identify issues:
 1. **Low Accuracy (< 0.7)**: Prompt may not guide agents toward effective solutions
 2. **Low Generation Rate (< 0.8)**: Prompt may be unclear, causing agents to fail creating submissions
 3. **High Bug Rate**: Prompt may be missing important instructions or constraints
-4. **Low Success Rate**: Agents are failing to execute or validate properly
 
 ## Step 2: Root Cause Analysis
 Based on the prompt content and performance metrics, identify:

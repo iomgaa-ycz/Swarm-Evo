@@ -16,8 +16,16 @@ Enable **{{ student_agent }}**'s prompt to learn from **{{ teacher_agent }}**'s 
 {{ student_prompt }}
 ```
 
-**Reflection Guidance** (if available):
-{{ student_guidance }}
+**Reflection Analysis** (if available):
+{% if student_reflection %}
+**Assessment**: {{ student_reflection.diagnosis.get('performance_assessment', 'N/A') if student_reflection.diagnosis else 'N/A' }}
+**Primary Issues**:
+{% for issue in student_reflection.diagnosis.get('primary_issues', []) if student_reflection.diagnosis else [] %}
+- {{ issue }}
+{% endfor %}
+{% else %}
+No reflection available.
+{% endif %}
 
 # Teacher Agent: {{ teacher_agent }}
 
@@ -31,8 +39,16 @@ Enable **{{ student_agent }}**'s prompt to learn from **{{ teacher_agent }}**'s 
 {{ teacher_prompt }}
 ```
 
-**Reflection Guidance** (if available):
-{{ teacher_guidance }}
+**Reflection Analysis** (if available):
+{% if teacher_reflection %}
+**Assessment**: {{ teacher_reflection.diagnosis.get('performance_assessment', 'N/A') if teacher_reflection.diagnosis else 'N/A' }}
+**Primary Issues**:
+{% for issue in teacher_reflection.diagnosis.get('primary_issues', []) if teacher_reflection.diagnosis else [] %}
+- {{ issue }}
+{% endfor %}
+{% else %}
+No reflection available.
+{% endif %}
 
 # Performance Gap
 Score Gap = {{ score_gap }}

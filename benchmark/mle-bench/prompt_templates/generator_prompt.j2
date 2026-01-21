@@ -10,12 +10,45 @@ You are an expert prompt engineer specializing in ML competition agent systems. 
 ```
 
 # Reflection Analysis
-{{ analysis }}
-
-# Improvement Suggestions
-{% for suggestion in suggestions %}
-{{ loop.index }}. {{ suggestion }}
+{% if reflection %}
+## Diagnosis
+{% if reflection.diagnosis %}
+**Primary Issues**:
+{% for issue in reflection.diagnosis.get('primary_issues', []) %}
+- {{ issue }}
 {% endfor %}
+
+**Root Causes**:
+{% for cause in reflection.diagnosis.get('root_causes', []) %}
+- {{ cause }}
+{% endfor %}
+
+**Assessment**: {{ reflection.diagnosis.get('performance_assessment', 'N/A') }}
+{% endif %}
+
+## Suggestions
+{% if reflection.suggestions %}
+{% for suggestion in reflection.suggestions %}
+**Priority {{ suggestion.priority }}**: {{ suggestion.issue }}
+- **Proposal**: {{ suggestion.proposal }}
+- **Rationale**: {{ suggestion.rationale }}
+- **Expected Impact**: {{ suggestion.expected_impact }}
+
+{% endfor %}
+{% endif %}
+
+## Implementation Strategy
+{{ reflection.get('implementation_strategy', 'N/A') }}
+
+## Expected Improvements
+{% if reflection.get('expected_improvements') %}
+- **Accuracy Target**: {{ reflection.expected_improvements.get('avg_accuracy_target', 'N/A') }}
+- **Generation Rate Target**: {{ reflection.expected_improvements.get('generation_rate_target', 'N/A') }}
+- **Reasoning**: {{ reflection.expected_improvements.get('reasoning', 'N/A') }}
+{% endif %}
+{% else %}
+No reflection analysis available.
+{% endif %}
 
 # Additional Context
 {% if additional_context %}
