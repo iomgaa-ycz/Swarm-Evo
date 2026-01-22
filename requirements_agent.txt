@@ -325,3 +325,9 @@ xxhash==3.6.0
 yarl==1.22.0
 zipp==3.23.0
 zstandard==0.25.0
+
+# 静态类型检查工具
+mypy==1.15.0
+pyright==1.1.399
+ruff==0.9.9
+pre-commit==4.1.0

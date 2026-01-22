@@ -1,0 +1,125 @@
+# GitHub Actions 工作流
+# 在 PR 和 merge 时自动运行类型检查和代码质量检查
+
+name: Type Check & Code Quality
+
+on:
+  # 在 PR 到 main 分支时触发
+  pull_request:
+    branches: [main, master]
+  # 在 main 分支 push 时触发
+  push:
+    branches: [main, master]
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  # 类型检查任务
+  type-check:
+    name: Type Check (Mypy + Pyright)
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 设置 Python 3.12
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # 3. 安装依赖（使用 requirements_agent.txt）
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_agent.txt
+
+      # 4. 运行 Mypy
+      - name: Run Mypy
+        run: mypy core/ utils/ main.py run_mle_adapter.py
+        continue-on-error: false  # Mypy 失败则中断
+
+      # 5. 运行 Pyright
+      - name: Run Pyright
+        run: pyright
+        continue-on-error: false  # Pyright 失败则中断
+
+  # 代码质量检查任务
+  code-quality:
+    name: Code Quality (Ruff + Pre-commit)
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 设置 Python 3.12
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # 3. 安装依赖
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_agent.txt
+
+      # 4. 运行 Ruff 检查
+      - name: Run Ruff check
+        run: ruff check core/ utils/ main.py run_mle_adapter.py
+        continue-on-error: false
+
+      # 5. 运行 Pre-commit hooks
+      - name: Run Pre-commit
+        run: |
+          pre-commit install
+          pre-commit run --all-files
+        continue-on-error: false
+
+  # 快速检查任务（只检查变更的文件）
+  quick-check:
+    name: Quick Check (Changed Files Only)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史以便比较
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_agent.txt
+
+      # 获取变更的文件
+      - name: Get changed files
+        id: changed-files
+        run: |
+          git diff --name-only origin/main...HEAD > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+
+      # 对变更的文件运行 Ruff
+      - name: Run Ruff on changed files
+        if: hashFiles('changed_files.txt') != ''
+        run: |
+          python_files=$(grep '\.py$' changed_files.txt | tr '\n' ' ')
+          if [ -n "$python_files" ]; then
+            echo "Running Ruff on changed Python files: $python_files"
+            ruff check $python_files
+          else
+            echo "No Python files changed"
+          fi

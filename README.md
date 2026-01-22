@@ -61,7 +61,30 @@ pip install -r requirements_agent.txt #linux系统，如果是mac系统需要自
 cp .env.example .env
 ```
 
-3. 配置MLE-bench
+3. 静态类型检查配置（代码质量保障）
+
+项目集成了自动类型检查和代码质量检查，确保代码规范和类型安全。
+
+```bash
+# 在 agent 环境中安装 pre-commit hooks（只需一次）
+conda activate agent
+pre-commit install
+```
+
+**日常使用：**
+- 提交代码时自动运行检查：`git commit -m "your message"`
+- 手动运行全部检查：`pre-commit run --all-files`
+
+**手动检查工具：**
+```bash
+mypy core/ utils/    # 类型检查
+pyright              # 快速类型检查
+ruff check .         # 代码检查
+```
+
+**说明**：所有检查失败时会阻止提交（可使用 `git commit --no-verify` 强制跳过，不推荐）。详细的配置说明请查看 `docs/TYPE_CHECKING_SETUP.md`。
+
+4. 配置MLE-bench
 
 配置MLE-bench需要下载一个特殊的库`https://github.com/openai/mle-bench.git`
 

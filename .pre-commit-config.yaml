@@ -1,0 +1,53 @@
+# Pre-commit 配置文件
+# 使用方法：
+# 1. 在 agent 环境中运行: pip install -r requirements_agent.txt
+# 2. 安装 hooks: pre-commit install
+# 3. 手动运行: pre-commit run --all-files
+# 4. 提交前会自动检查: git commit
+
+repos:
+  # 1. Ruff - 代码检查和格式化（比 pylint/black 更快）
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]  # 自动修复可修复的问题
+      - id: ruff-format
+        args: [--check]  # 仅检查，不自动格式化（MVP 阶段）
+
+  # 2. Mypy - 静态类型检查
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+        args: [--config-file=pyproject.toml, --no-error-summary]
+        # 排除不需要类型检查的文件
+        exclude: ^(workspace|logs|build|dist|.venv|__pycache__)/
+
+  # 3. Pyright - 微软的快速类型检查器
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: pyright
+        language: system
+        types: [python]
+        args: [--project=pyproject.toml]
+        pass_filenames: false  # pyright 会自己扫描整个项目
+
+  # 4. 通用检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace  # 检查行尾空格
+      - id: end-of-file-fixer    # 确保文件以空行结尾
+      - id: check-yaml           # 检查 YAML 语法
+      - id: check-added-large-files  # 检查大文件
+        args: ['--maxkb=1000']   # 限制 1MB
+
+# 全局配置
+default_stages: [commit]  # 在 commit 阶段运行
+fail_fast: false  # 继续运行所有检查，不因为一个失败就停止

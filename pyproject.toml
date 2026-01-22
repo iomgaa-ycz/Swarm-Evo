@@ -1,0 +1,95 @@
+# Swarm-Evo 项目配置
+
+[project]
+name = "swarm-evo"
+version = "0.1.0"
+description = "基于群体智能与进化算法的多Agent系统"
+requires-python = ">=3.12"
+
+[tool.mypy]
+# Mypy 基础配置
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # MVP 项目，暂不强制所有函数都有类型注解
+disallow_any_unimported = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+check_untyped_defs = true
+strict_equality = true
+
+# 逐步启用严格模式（可根据需要调整）
+# disallow_untyped_defs = true  # 未来启用：要求所有函数都有类型注解
+# disallow_any_generics = true  # 未来启用：禁止未指定泛型参数
+
+# 第三方库存根配置
+ignore_missing_imports = true  # 忽略缺少类型存根的第三方库
+
+# 排除目录
+exclude = [
+    "workspace/",
+    "logs/",
+    ".venv/",
+    "build/",
+    "dist/",
+]
+
+# 针对特定模块的配置
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pyright]
+# Pyright 配置
+include = ["core", "utils", "main.py", "run_mle_adapter.py"]
+exclude = [
+    "workspace",
+    "logs",
+    ".venv",
+    "**/__pycache__",
+]
+
+pythonVersion = "3.12"
+typeCheckingMode = "basic"  # 可选: "off", "basic", "standard", "strict"
+
+# 报告设置
+reportMissingImports = true
+reportMissingTypeStubs = false  # 第三方库可能缺少类型存根
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportOptionalCall = "warning"
+
+# MVP 项目，暂时宽松处理
+reportGeneralTypeIssues = "warning"  # 未来可改为 "error"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownVariableType = "none"
+
+[tool.ruff]
+# Ruff 代码检查和格式化配置（可选）
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # 行长度检查（已在 line-length 配置）
+]
+
+exclude = [
+    "workspace",
+    "logs",
+    ".venv",
+]
