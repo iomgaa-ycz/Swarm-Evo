@@ -1,10 +1,11 @@
-import pathlib
 import io
 import os
+import pathlib
+
 import humanize
-from rich.tree import Tree
-from rich.text import Text
 from rich.console import Console
+from rich.tree import Tree
+
 
 class DirectoryTreeGenerator:
     """
@@ -12,7 +13,7 @@ class DirectoryTreeGenerator:
     旨在为 LLM 提供清晰的文件系统上下文，包含文件大小和目录项统计等元数据。
     """
 
-    def __init__(self, root_path: str, max_depth: int = None, ignore_patterns: list = None, 
+    def __init__(self, root_path: str, max_depth: int = None, ignore_patterns: list = None,
                  collapse_extensions: list = None, collapse_threshold: int = 3, preview_files: list = None):
         """
         初始化目录树生成器。
@@ -29,7 +30,7 @@ class DirectoryTreeGenerator:
         self.root_path = pathlib.Path(root_path)
         self.max_depth = max_depth
         self.ignore_patterns = ignore_patterns or ['.git', '__pycache__', '.DS_Store']
-        
+
         # 默认的折叠后缀列表
         default_collapse = [
             # Images
@@ -48,10 +49,10 @@ class DirectoryTreeGenerator:
         self.collapse_extensions = collapse_extensions if collapse_extensions is not None else default_collapse
         # normalize to lowercase and ensure no leading dots
         self.collapse_extensions = [ext.lower().lstrip('.') for ext in self.collapse_extensions]
-        
+
         self.collapse_threshold = collapse_threshold
         self.preview_files = preview_files if preview_files is not None else ['sample_submission.csv', 'train.csv']
-        
+
         if not self.root_path.exists():
             raise FileNotFoundError(f"Path not found: {root_path}")
         if not self.root_path.is_dir():
@@ -81,20 +82,20 @@ class DirectoryTreeGenerator:
             lines_to_read = 5
             if file_path.suffix.lower() == '.md':
                 lines_to_read = 10
-            
+
             preview_lines = []
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 for _ in range(lines_to_read):
                     line = f.readline()
                     if not line:
                         break
                     preview_lines.append(line.rstrip())
-            
+
             if not preview_lines:
                 return "(Empty file)"
-                
+
             return "\n".join(preview_lines) + "\n..."
-            
+
         except UnicodeDecodeError:
             return "(Preview unavailable: Binary file or encoding error)"
         except Exception as e:
@@ -156,11 +157,11 @@ class DirectoryTreeGenerator:
             # 如果该文件的后缀被折叠了，则跳过
             if ext in collapsed_extensions:
                 continue
-            
+
             # 否则正常显示
             label = self._format_node_label(f)
             tree_node.add(label)
-            
+
             # 检查是否需要预览
             if f.name in self.preview_files:
                 preview_content = self._get_file_preview(f)
@@ -176,7 +177,7 @@ class DirectoryTreeGenerator:
             name = f"{path.resolve()}/"
 
         meta_info = ""
-        
+
         if path.is_dir():
             # 统计目录下的文件数（浅层统计，不递归，为了性能）
             try:
@@ -186,7 +187,7 @@ class DirectoryTreeGenerator:
                 meta_info = f" ({count} items)"
             except PermissionError:
                 meta_info = " (Access Denied)"
-                
+
             # Check for read-only status
             if not os.access(path, os.W_OK):
                 meta_info += " (Read-only, modification forbidden)"
@@ -201,7 +202,7 @@ class DirectoryTreeGenerator:
 
         # 构建 Text 对象以便利用 rich 的格式化能力 (虽然最后会转纯文本，但 rich 可以处理 emoji 等)
         # 这里我们简单返回字符串供 Tree 使用，让 Tree 处理结构
-        
+
         if path.is_dir():
              return f"📂 {name}{meta_info}"
         else:
@@ -214,7 +215,7 @@ class DirectoryTreeGenerator:
         console = Console(file=io.StringIO(), width=100, force_terminal=False, color_system=None)
         console.print(tree)
         output = console.file.getvalue()
-        
+
         # 封装在 Markdown 代码块中
         markdown_output = f"```\n{output}```"
         return markdown_output

@@ -8,47 +8,49 @@ Prompt学习器模块
 4. 记录学习历史和效果
 """
 
-from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
 from langchain_core.language_models import BaseChatModel
-from core.optimization.version_manager import (
-    AgentVersionManager,
-    PromptVersionRecord
-)
-from core.optimization.utils import LLMResponseParser, MessageBuilder, FileSaver
+
+from core.optimization.utils import FileSaver, LLMResponseParser, MessageBuilder
+from core.optimization.version_manager import AgentVersionManager, PromptVersionRecord
+from utils.logger_system import log_msg
 
 
 @dataclass
 class LearningCandidate:
     """学习候选对"""
-    student_agent: str                    # 学习者（低分Agent）
-    teacher_agent: str                    # 被学习者（高分Agent）
-    prompt_type: str                      # prompt类型 (explore/merge)
-    student_score: float                  # 学生得分（综合评分）
-    teacher_score: float                  # 老师得分（综合评分）
-    score_gap: float                      # 分数差距
-    student_prompt_id: Optional[str]      # 学生当前prompt ID
-    teacher_prompt_id: Optional[str]      # 老师当前prompt ID
-    student_version: Optional[PromptVersionRecord] = None  # 学生完整版本记录
-    teacher_version: Optional[PromptVersionRecord] = None  # 老师完整版本记录
+
+    student_agent: str  # 学习者（低分Agent）
+    teacher_agent: str  # 被学习者（高分Agent）
+    prompt_type: str  # prompt类型 (explore/merge)
+    student_score: float  # 学生得分（综合评分）
+    teacher_score: float  # 老师得分（综合评分）
+    score_gap: float  # 分数差距
+    student_prompt_id: str | None  # 学生当前prompt ID
+    teacher_prompt_id: str | None  # 老师当前prompt ID
+    student_version: PromptVersionRecord | None = None  # 学生完整版本记录
+    teacher_version: PromptVersionRecord | None = None  # 老师完整版本记录
 
 
 @dataclass
 class LearningResult:
     """学习结果"""
-    success: bool                         # 是否成功学习
-    student_agent: str                    # 学习者
-    teacher_agent: str                    # 被学习者
-    prompt_type: str                      # prompt类型
-    old_prompt_id: str                    # 原prompt ID
-    new_prompt_id: str                    # 新prompt ID
-    old_score: float                      # 学习前分数
-    timestamp: str                        # 学习时间
-    reasoning: str                        # 学习理由（LLM生成）
-    error: Optional[str] = None           # 错误信息
-    llm_response: Optional[str] = None    # 完整的LLM响应（用于调试）
+
+    success: bool  # 是否成功学习
+    student_agent: str  # 学习者
+    teacher_agent: str  # 被学习者
+    prompt_type: str  # prompt类型
+    old_prompt_id: str  # 原prompt ID
+    new_prompt_id: str  # 新prompt ID
+    old_score: float  # 学习前分数
+    timestamp: str  # 学习时间
+    reasoning: str  # 学习理由（LLM生成）
+    error: str | None = None  # 错误信息
+    llm_response: str | None = None  # 完整的LLM响应（用于调试）
 
 
 class PromptLearner:
@@ -69,8 +71,8 @@ class PromptLearner:
         version_manager: AgentVersionManager,
         llm: BaseChatModel,
         prompt_manager: Any,
-        learning_threshold: float = 0.1,     # 学习阈值（分数差距）
-        storage_dir: str = "workspace/prompt_learning"
+        learning_threshold: float = 0.1,  # 学习阈值（分数差距）
+        storage_dir: str = "workspace/prompt_learning",
     ):
         """
         初始化Prompt学习器
@@ -92,13 +94,9 @@ class PromptLearner:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         # 学习历史
-        self.learning_history: List[LearningResult] = []
+        self.learning_history: list[LearningResult] = []
 
-    def analyze_learning_opportunities(
-        self,
-        prompt_type: str,
-        min_agents: int = 2
-    ) -> List[LearningCandidate]:
+    def analyze_learning_opportunities(self, prompt_type: str, min_agents: int = 2) -> list[LearningCandidate]:
         """
         分析学习机会，识别可以学习的候选对
 
@@ -135,37 +133,39 @@ class PromptLearner:
             # 使用综合评分
             score = current_prompt.composite_score
 
-            agent_scores.append({
-                'agent_name': agent_name,
-                'score': score,
-                'prompt_id': current_prompt.version_id,
-                'prompt_version': current_prompt,
-                'total_tasks': current_prompt.used_count
-            })
+            agent_scores.append(
+                {
+                    "agent_name": agent_name,
+                    "score": score,
+                    "prompt_id": current_prompt.version_id,
+                    "prompt_version": current_prompt,
+                    "total_tasks": current_prompt.used_count,
+                }
+            )
 
         # 生成所有可能的学习候选对（低分 -> 高分）
         candidates = []
 
         for student in agent_scores:
             for teacher in agent_scores:
-                if student['agent_name'] == teacher['agent_name']:
+                if student["agent_name"] == teacher["agent_name"]:
                     continue
 
-                score_gap = teacher['score'] - student['score']
+                score_gap = teacher["score"] - student["score"]
 
                 # 只有分数差距超过阈值才考虑学习
                 if score_gap >= self.learning_threshold:
                     candidate = LearningCandidate(
-                        student_agent=student['agent_name'],
-                        teacher_agent=teacher['agent_name'],
+                        student_agent=student["agent_name"],
+                        teacher_agent=teacher["agent_name"],
                         prompt_type=prompt_type,
-                        student_score=student['score'],
-                        teacher_score=teacher['score'],
+                        student_score=student["score"],
+                        teacher_score=teacher["score"],
                         score_gap=score_gap,
-                        student_prompt_id=student['prompt_id'],
-                        teacher_prompt_id=teacher['prompt_id'],
-                        student_version=student['prompt_version'],
-                        teacher_version=teacher['prompt_version']
+                        student_prompt_id=student["prompt_id"],
+                        teacher_prompt_id=teacher["prompt_id"],
+                        student_version=student["prompt_version"],
+                        teacher_version=teacher["prompt_version"],
                     )
                     candidates.append(candidate)
 
@@ -174,10 +174,7 @@ class PromptLearner:
 
         return candidates
 
-    async def execute_learning(
-        self,
-        candidate: LearningCandidate
-    ) -> LearningResult:
+    async def execute_learning(self, candidate: LearningCandidate) -> LearningResult:
         """
         执行学习操作（使用LLM）
 
@@ -204,7 +201,7 @@ class PromptLearner:
                     old_score=candidate.student_score,
                     timestamp=timestamp,
                     reasoning="",
-                    error="Missing version information"
+                    error="Missing version information",
                 )
 
             # 使用LLM执行学习
@@ -220,10 +217,7 @@ class PromptLearner:
             # 构建crossover_source（只有当teacher_prompt_id存在时）
             crossover_source = None
             if candidate.teacher_prompt_id:
-                crossover_source = {
-                    "agent": candidate.teacher_agent,
-                    "version_id": candidate.teacher_prompt_id
-                }
+                crossover_source = {"agent": candidate.teacher_agent, "version_id": candidate.teacher_prompt_id}
 
             await self.version_manager.record_prompt_version(
                 agent_name=candidate.student_agent,
@@ -232,7 +226,7 @@ class PromptLearner:
                 prompt_content=new_prompt_content,
                 source="learned",
                 previous_version_id=candidate.student_prompt_id,
-                crossover_source=crossover_source
+                crossover_source=crossover_source,
             )
 
             # 创建学习结果
@@ -246,7 +240,7 @@ class PromptLearner:
                 old_score=candidate.student_score,
                 timestamp=timestamp,
                 reasoning=reasoning,
-                llm_response=llm_response
+                llm_response=llm_response,
             )
 
             # 保存到历史
@@ -266,15 +260,12 @@ class PromptLearner:
                 old_score=candidate.student_score,
                 timestamp=timestamp,
                 reasoning="",
-                error=str(e)
+                error=str(e),
             )
             self.learning_history.append(result)
             return result
 
-    async def _learn_with_llm(
-        self,
-        candidate: LearningCandidate
-    ) -> Tuple[str, str, str]:
+    async def _learn_with_llm(self, candidate: LearningCandidate) -> tuple[str, str, str]:
         """
         使用LLM执行学习，生成融合后的prompt
 
@@ -302,21 +293,23 @@ class PromptLearner:
             "teacher_reflection": candidate.teacher_version.reflection if candidate.teacher_version else None,
             "student_metrics": {
                 "avg_accuracy": candidate.student_version.avg_accuracy if candidate.student_version else 0.0,
-                "avg_generation_rate": candidate.student_version.avg_generation_rate if candidate.student_version else 0.0,
-                "composite_score": candidate.student_score
+                "avg_generation_rate": candidate.student_version.avg_generation_rate
+                if candidate.student_version
+                else 0.0,
+                "composite_score": candidate.student_score,
             },
             "teacher_metrics": {
                 "avg_accuracy": candidate.teacher_version.avg_accuracy if candidate.teacher_version else 0.0,
-                "avg_generation_rate": candidate.teacher_version.avg_generation_rate if candidate.teacher_version else 0.0,
-                "composite_score": candidate.teacher_score
-            }
+                "avg_generation_rate": candidate.teacher_version.avg_generation_rate
+                if candidate.teacher_version
+                else 0.0,
+                "composite_score": candidate.teacher_score,
+            },
         }
 
         # 构建消息
         messages = MessageBuilder.build_llm_messages(
-            template_content=template_content,
-            template_vars=template_vars,
-            human_message="请生成学习后的新prompt。"
+            template_content=template_content, template_vars=template_vars, human_message="请生成学习后的新prompt。"
         )
 
         try:
@@ -335,7 +328,7 @@ class PromptLearner:
             error_msg = f"LLM调用失败，使用备用策略: {str(e)}"
             return fallback_prompt, error_msg, error_msg
 
-    def _parse_learning_response(self, response_content: str) -> Tuple[str, str]:
+    def _parse_learning_response(self, response_content: str) -> tuple[str, str]:
         """
         解析LLM的学习响应
 
@@ -363,10 +356,7 @@ class PromptLearner:
             log_msg("WARNING", f"LLM did not return JSON format. Response preview: {response_content[:200]}...")
             return response_content, "Failed to parse reasoning (LLM response not in JSON format)"
 
-    def _fallback_learning(
-        self,
-        candidate: LearningCandidate
-    ) -> str:
+    def _fallback_learning(self, candidate: LearningCandidate) -> str:
         """
         备用学习策略（当LLM调用失败时）
 
@@ -376,11 +366,7 @@ class PromptLearner:
             return candidate.teacher_version.prompt_content
         return ""
 
-    def get_learning_history(
-        self,
-        agent_name: Optional[str] = None,
-        limit: Optional[int] = None
-    ) -> List[LearningResult]:
+    def get_learning_history(self, agent_name: str | None = None, limit: int | None = None) -> list[LearningResult]:
         """
         获取学习历史
 
@@ -394,17 +380,14 @@ class PromptLearner:
         history = self.learning_history
 
         if agent_name:
-            history = [
-                record for record in history
-                if record.student_agent == agent_name
-            ]
+            history = [record for record in history if record.student_agent == agent_name]
 
         if limit:
             history = history[-limit:]
 
         return history
 
-    def get_learning_statistics(self) -> Dict[str, Any]:
+    def get_learning_statistics(self) -> dict[str, Any]:
         """
         获取学习统计信息
 
@@ -425,7 +408,7 @@ class PromptLearner:
             "successful_learning": successful_learning,
             "success_rate": successful_learning / total_learning if total_learning > 0 else 0,
             "agent_learning_counts": agent_learning_counts,
-            "learning_threshold": self.learning_threshold
+            "learning_threshold": self.learning_threshold,
         }
 
     def _save_learning_result(self, result: LearningResult) -> None:
@@ -447,7 +430,7 @@ class PromptLearner:
             "old_score": result.old_score,
             "timestamp": result.timestamp,
             "reasoning": result.reasoning,
-            "error": result.error
+            "error": result.error,
         }
 
         # 如果有完整的LLM响应，保存它（用于调试）
@@ -455,8 +438,5 @@ class PromptLearner:
             result_dict["llm_response"] = result.llm_response
 
         FileSaver.save_result_to_json(
-            result=result_dict,
-            filename=filename,
-            storage_dir=str(self.storage_dir),
-            result_type="学习"
+            result=result_dict, filename=filename, storage_dir=str(self.storage_dir), result_type="学习"
         )

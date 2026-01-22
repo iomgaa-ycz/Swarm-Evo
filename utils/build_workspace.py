@@ -5,15 +5,16 @@
 
 import shutil
 from pathlib import Path
+
 from utils.logger_system import log_msg
-from typing import Optional
+
 from .config import Config
-from .system_info import get_hardware_description
+
 
 def build_workspace(
     config: Config,
-    workspace_dir: Optional[str] = None,
-    competition: Optional[str] = None
+    workspace_dir: str | None = None,
+    competition: str | None = None
 ) -> str:
     """
     构建完整的 MLE-bench workspace 目录结构
@@ -94,7 +95,7 @@ def build_workspace(
                 shutil.copytree(item, target_path)
 
     # 第七阶段：读取并返回 description.md 内容
-    with open(description_source, 'r', encoding='utf-8') as f:
+    with open(description_source, encoding='utf-8') as f:
         description_content = f.read()
 
     return description_content

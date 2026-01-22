@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Dict, List, Any, Optional
+from typing import Any
+
+from core.execution.journal import Journal, Node
 from utils.logger_system import log_msg
-
-from core.execution.journal import Node, Journal
-
 
 _LOCUS_NAMES = [
     "DATA",
@@ -42,7 +41,7 @@ class GeneRegistry:
     """Tracks pheromone statistics for individual genes per locus."""
 
     def __init__(self) -> None:
-        self._registry: Dict[str, Dict[str, Dict[str, Any]]] = {
+        self._registry: dict[str, dict[str, dict[str, Any]]] = {
             locus: {} for locus in _LOCUS_NAMES
         }
 
@@ -64,7 +63,7 @@ class GeneRegistry:
                 f"[GENE-REGISTRY] node={node.id[:6]} locus={locus} "
                 f"len={len(gene_content) if gene_content else 0}"
             )
-            
+
             if not gene_content:
                 continue
             normalized = normalize_gene_text(gene_content)
@@ -99,9 +98,9 @@ class GeneRegistry:
             return default_init
         return float(entry.get("pheromone", default_init))
 
-    def build_gene_pools(self, journal: Optional[Journal] = None) -> Dict[str, List[Dict[str, Any]]]:
+    def build_gene_pools(self, journal: Journal | None = None) -> dict[str, list[dict[str, Any]]]:
         """Return gene pools for all loci."""
-        pools: Dict[str, List[Dict[str, Any]]] = {locus: [] for locus in _LOCUS_NAMES}
+        pools: dict[str, list[dict[str, Any]]] = {locus: [] for locus in _LOCUS_NAMES}
         for locus, entries in self._registry.items():
             for gene_id, record in entries.items():
                 pools[locus].append(

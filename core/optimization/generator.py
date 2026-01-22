@@ -7,13 +7,15 @@
 3. 保存新生成的prompt版本
 """
 
-from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
+
 from langchain_core.language_models import BaseChatModel
+
 from core.agent.prompt_manager import PromptManager
-from core.optimization.version_manager import AgentVersionManager
 from core.optimization.utils import LLMResponseParser, MessageBuilder
+from core.optimization.version_manager import AgentVersionManager
 from utils.logger_system import log_msg
 
 
@@ -23,12 +25,12 @@ class GenerationResult:
     success: bool  # 是否成功生成
     new_prompt: str  # 新生成的prompt内容
     version: str  # 版本号
-    changes_made: List[str]  # 所做的修改列表
+    changes_made: list[str]  # 所做的修改列表
     reasoning: str  # 修改理由
     original_prompt: str  # 原始prompt
-    suggestions_used: List[str]  # 使用的建议列表
-    error: Optional[str] = None  # 错误信息（如果生成失败）
-    parse_error: Optional[str] = None  # 解析错误信息
+    suggestions_used: list[str]  # 使用的建议列表
+    error: str | None = None  # 错误信息（如果生成失败）
+    parse_error: str | None = None  # 解析错误信息
 
 
 class PromptGenerator:
@@ -61,8 +63,8 @@ class PromptGenerator:
         agent_name: str,
         prompt_type: str,
         current_prompt: str,
-        reflection: Dict[str, Any],
-        additional_context: Optional[Dict[str, Any]] = None
+        reflection: dict[str, Any],
+        additional_context: dict[str, Any] | None = None
     ) -> GenerationResult:
         """
         根据反思结果生成新版本的prompt
@@ -143,9 +145,9 @@ class PromptGenerator:
         self,
         prompt_type: str,
         current_prompt: str,
-        reflection: Dict[str, Any],
-        additional_context: Dict[str, Any]
-    ) -> List:
+        reflection: dict[str, Any],
+        additional_context: dict[str, Any]
+    ) -> list:
         """
         构建用于LLM生成的消息
         """
@@ -171,7 +173,7 @@ class PromptGenerator:
         response_content: str,
         original_prompt: str,
         version: str,
-        reflection: Dict[str, Any]
+        reflection: dict[str, Any]
     ) -> GenerationResult:
         """
         解析LLM的生成响应

@@ -1,13 +1,13 @@
+import math
+import random
 import time
 import uuid
-import random
-import math
 from threading import Lock
-from typing import List, Optional, Dict, Any
+from typing import Any
 
-from core.execution.task_class import Task
+from core.evolution.pheromone import compute_node_pheromone, ensure_node_stats
 from core.execution.journal import Journal, Node
-from core.evolution.pheromone import ensure_node_stats, compute_node_pheromone
+from core.execution.task_class import Task
 from utils.config import get_config
 from utils.logger_system import log_msg
 
@@ -15,15 +15,15 @@ from utils.logger_system import log_msg
 class Pipeline:
     """
     任务执行管道类
-    
+
     负责管理任务的生命周期，包括任务的生成、分发、完成和后续任务的追加。
     支持多线程并发访问。
     """
 
     def __init__(self, journal: Journal):
         self.lock = Lock()
-        self.tasks: List[Task] = []
-        self.temporary_storage: Dict[str, Any] = {}
+        self.tasks: list[Task] = []
+        self.temporary_storage: dict[str, Any] = {}
         self.journal = journal
         self.config = get_config()
         # NEW: node-level logical time (for recency)
@@ -38,7 +38,7 @@ class Pipeline:
             for _ in range(self.config.init_task_num):
                 self._add_task_internal(self._create_task("explore"))
 
-    def _create_task(self, task_type: str, payload: Dict[str, Any] = None) -> Task:
+    def _create_task(self, task_type: str, payload: dict[str, Any] = None) -> Task:
         """
         创建新任务实例
         """
@@ -50,7 +50,7 @@ class Pipeline:
             status="pending",
             created_at=time.time(),
             agent_name=None,
-            dependencies=None
+            dependencies=None,
         )
 
     def add_task(self, task: Task):
@@ -74,14 +74,14 @@ class Pipeline:
         self.tasks.insert(0, task)
         # log_msg("DEBUG", f"Task {task['id']} (type={task['type']}) prepended to pipeline.")
 
-    def get_task(self) -> Optional[Task]:
+    def get_task(self) -> Task | None:
         """
         在开头取出一个未分配任务。
         如果当前没有未分配任务，则根据配置自动生成一批新任务。
         """
         with self.lock:
             # 1. 查找第一个 pending 任务
-            pending_tasks = [t for t in self.tasks if t['status'] == 'pending']
+            pending_tasks = [t for t in self.tasks if t["status"] == "pending"]
 
             # 2. 如果没有 pending 任务，生成新任务
             if not pending_tasks:
@@ -102,11 +102,11 @@ class Pipeline:
             # 为了防止被重复取出，这里应该标记为 running 或者 assigned?
             # 这里的语义通常是 "Claim" 任务。如果不改状态，下次 get_task 还会取到它。
             # 所以必须修改状态。
-            task_to_run['status'] = 'running'
-            
+            task_to_run["status"] = "running"
+
             return task_to_run
 
-    def _generate_new_tasks(self) -> List[Task]:
+    def _generate_new_tasks(self) -> list[Task]:
         """
         根据 explore_ratio 和 epoch_task_num 生成任务
         """
@@ -125,19 +125,15 @@ class Pipeline:
                 new_tasks.append(self._create_task(task_type))
         return new_tasks
 
-    def _select_parent_node_by_pheromone(self) -> Optional[Node]:
+    def _select_parent_node_by_pheromone(self) -> Node | None:
         """
         Selects a parent node using pheromone-based sampling.
         """
-        valid_nodes = [
-            node for node in self.journal.nodes.values()
-            if node.score is not None and not node.is_buggy
-        ]
+        valid_nodes = [node for node in self.journal.nodes.values() if node.score is not None and not node.is_buggy]
         if not valid_nodes:
             return None
 
         current_step = self.current_node_step
-
 
         score_min = self.journal.score_min
         score_max = self.journal.score_max
@@ -158,15 +154,14 @@ class Pipeline:
         temperature = 3.0
         logits = [p / temperature for p in pheromones]
         max_logit = max(logits)
-        weights = [math.exp(l - max_logit) for l in logits]
+        weights = [math.exp(logit - max_logit) for logit in logits]
         parent_node = random.choices(valid_nodes, weights=weights, k=1)[0]
 
         ensure_node_stats(parent_node)
         parent_node.metadata["usage_count"] += 1
         log_msg(
             "INFO",
-            f"Selected parent {parent_node.id} with pheromone "
-            f"{parent_node.metadata.get('pheromone_node', 0.0):.4f}",
+            f"Selected parent {parent_node.id} with pheromone {parent_node.metadata.get('pheromone_node', 0.0):.4f}",
         )
         return parent_node
 
@@ -175,17 +170,17 @@ class Pipeline:
         根据时间先后对所有任务重新排序
         """
         with self.lock:
-            self.tasks.sort(key=lambda t: t['created_at'])
+            self.tasks.sort(key=lambda t: t["created_at"])
 
-    def complete_task(self, task_id: str, result_nodes: List[Node] = None, update_data: Optional[Dict[str, Any]] = None):
+    def complete_task(self, task_id: str, result_nodes: list[Node] = None, update_data: dict[str, Any] | None = None):
         """
         完成一个任务，并根据特定规则添加后续任务。
-        
+
         Args:
             task_id: 任务 ID
             result_nodes: 如果是 explore/merge 任务，传入新创建的 Node 对象列表
             update_data: 如果是 review 任务，传入更新数据 (score, summary, etc.)
-        
+
         规则:
         - explore -> review (Priority Insert)
         - merge -> review (Priority Insert)
@@ -195,21 +190,20 @@ class Pipeline:
 
         with self.lock:
             # 查找并更新任务状态
-            task = next((t for t in self.tasks if t['id'] == task_id), None)
+            task = next((t for t in self.tasks if t["id"] == task_id), None)
             if not task:
                 log_msg("WARNING", f"Attempted to complete unknown task {task_id}")
                 return
-            
-            task['status'] = 'completed'
+
+            task["status"] = "completed"
             # log_msg("INFO", f"Task {task_id} completed.")
 
             # --- Node Logic based on Task Type ---
             created_node_ids = []
-            
-            if task['type'] in ['explore', 'merge']:
+
+            if task["type"] in ["explore", "merge"]:
                 if result_nodes:
                     for node in result_nodes:
-                        
                         # 1. 递增全局 node 时间
                         self.current_node_step += 1
 
@@ -218,25 +212,22 @@ class Pipeline:
                         node.metadata["node_step"] = self.current_node_step
                         self.journal.add_node(node)
                         created_node_ids.append(node.id)
-                        
+
                         log_msg("INFO", f"Pipeline added Node {node.id} for task {task_id}")
-                        log_msg(
-                            "DEBUG",
-                            f"[GENE-DEBUG] Node {node.id[:6]} genes = {list(node.genes.keys())}"
-                        )
-            
-            elif task['type'] == 'review':
+                        log_msg("DEBUG", f"[GENE-DEBUG] Node {node.id[:6]} genes = {list(node.genes.keys())}")
+
+            elif task["type"] == "review":
                 if update_data:
-                    target_id = task['payload'].get('target_node_id')
+                    target_id = task["payload"].get("target_node_id")
                     if target_id:
                         node = self.journal.get_node(target_id)
                         if node:
-                            node.score = update_data.get('score')
-                            node.summary = update_data.get('summary', "")
-                            node.is_buggy = update_data.get('is_bug', False)
+                            node.score = update_data.get("score")
+                            node.summary = update_data.get("summary", "")
+                            node.is_buggy = update_data.get("is_bug", False)
                             if node.metadata is None:
                                 node.metadata = {}
-                            node.metadata['review_success'] = update_data.get('agent_success', False)
+                            node.metadata["review_success"] = update_data.get("agent_success", False)
                             ensure_node_stats(node)
                             success = node.score is not None and not node.is_buggy
                             if success:
@@ -259,39 +250,43 @@ class Pipeline:
                                     ensure_node_stats(parent)
                                     parent.metadata["success_count"] += 1
                             log_msg("INFO", f"Pipeline updated Node {target_id} with score {node.score}")
-                            log_msg("INFO",f"[PHEROMONE-UPDATE] Node={node.id[:6]} "f"score={node.score} "f"pheromone={node.metadata.get('pheromone_node'):.4f}")
+                            log_msg(
+                                "INFO",
+                                f"[PHEROMONE-UPDATE] Node={node.id[:6]} "
+                                f"score={node.score} "
+                                f"pheromone={node.metadata.get('pheromone_node'):.4f}",
+                            )
                         else:
                             log_msg("WARNING", f"Review target node {target_id} not found.")
- 
+
             # --- Follow-up Task Creation ---
             next_task_type = None
-            
-            if task['type'] == 'explore':
-                next_task_type = 'review'
+
+            if task["type"] == "explore":
+                next_task_type = "review"
                 if created_node_ids:
                     # Create a review task for EACH new node
                     for nid in created_node_ids:
                         payload = {"parent_id": task_id}
-                        payload['target_node_id'] = nid
-                        payload['template_name'] = "evaluate_user_prompt.j2"
-                        
+                        payload["target_node_id"] = nid
+                        payload["template_name"] = "evaluate_user_prompt.j2"
+
                         new_task = self._create_task(next_task_type, payload)
                         self._prepend_task_internal(new_task)
                 else:
                     log_msg("WARNING", "Explore task completed without any result nodes. Skipping Review.")
                     return
 
-
-            elif task['type'] == 'merge':
-                next_task_type = 'review'
+            elif task["type"] == "merge":
+                next_task_type = "review"
                 if created_node_ids:
                     for nid in created_node_ids:
-                         payload = {"parent_id": task_id}
-                         payload['target_node_id'] = nid
-                         payload['template_name'] = "evaluate_user_prompt.j2"
-                         
-                         new_task = self._create_task(next_task_type, payload)
-                         self._prepend_task_internal(new_task)
+                        payload = {"parent_id": task_id}
+                        payload["target_node_id"] = nid
+                        payload["template_name"] = "evaluate_user_prompt.j2"
+
+                        new_task = self._create_task(next_task_type, payload)
+                        self._prepend_task_internal(new_task)
                 else:
                     log_msg("WARNING", "Merge task completed without any result nodes. Skipping Review.")
                     return

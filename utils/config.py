@@ -9,8 +9,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 from openai import OpenAI
+
 from utils.logger_system import log_msg
 
 
@@ -136,7 +137,7 @@ class Config:
         value_str = self._get_required_env(key)
         try:
             return int(value_str)
-        except ValueError as exc:
+        except ValueError:
             log_msg("ERROR", f"{key}必须为整数，当前值为{value_str}")
 
     def _get_optional_int_env(self, key: str, default: int) -> int:
@@ -155,7 +156,7 @@ class Config:
              return default
         try:
             return int(value_str)
-        except ValueError as exc:
+        except ValueError:
              log_msg("WARNING", f"{key}必须为整数，当前值为{value_str}，使用默认值{default}")
              return default
 
@@ -172,7 +173,7 @@ class Config:
         value_str = self._get_required_env(key)
         try:
             return float(value_str)
-        except ValueError as exc:
+        except ValueError:
             log_msg("ERROR", f"{key}必须为浮点数，当前值为{value_str}")
 
     def validate(self) -> tuple[bool, str]:
@@ -220,7 +221,7 @@ class Config:
             BaseChatModel: LangChain Chat Model 实例
         """
         from langchain_openai import ChatOpenAI
-        
+
         return ChatOpenAI(
             model=self.model_name,
             api_key=self.api_key,
@@ -232,7 +233,7 @@ class Config:
 
 
 # 全局单例访问函数
-_config_instance: Optional[Config] = None
+_config_instance: Config | None = None
 
 
 def get_config() -> Config:

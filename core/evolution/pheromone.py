@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 from core.execution.journal import Node
-from utils.logger_system import log_msg
 
 
 def ensure_node_stats(node: Node) -> None:
@@ -27,7 +25,7 @@ def ensure_node_stats(node: Node) -> None:
         metadata["pheromone_node"] = None
 
 
-def _normalize_score(node: Node, score_min: Optional[float], score_max: Optional[float]) -> float:
+def _normalize_score(node: Node, score_min: float | None, score_max: float | None) -> float:
     """
     归一化节点得分到[0, 1]区间。
 
@@ -53,8 +51,8 @@ def _normalize_score(node: Node, score_min: Optional[float], score_max: Optional
 def compute_node_pheromone(
     node: Node,
     current_step: int,
-    score_min: Optional[float],
-    score_max: Optional[float],
+    score_min: float | None,
+    score_max: float | None,
     alpha: float = 0.5,
     beta: float = 0.3,
     delta: float = 0.2,

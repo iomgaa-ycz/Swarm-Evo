@@ -9,8 +9,8 @@ import os
 import platform
 import subprocess
 from collections import Counter
-import shutil
-from typing import Dict, List, Optional, Union
+from typing import Any
+
 from utils.logger_system import log_msg
 
 
@@ -27,7 +27,7 @@ def get_cpu_count() -> int:
     return count
 
 
-def get_memory_info() -> Dict[str, float]:
+def get_memory_info() -> dict[str, float]:
     """
     获取内存信息（单位：GB）
 
@@ -40,25 +40,23 @@ def get_memory_info() -> Dict[str, float]:
     """
     if platform.system() == "Linux":
         # 第一阶段：读取 /proc/meminfo
-        with open('/proc/meminfo', 'r') as f:
+        with open("/proc/meminfo") as f:
             meminfo = f.read()
 
         # 第二阶段：解析总内存
-        for line in meminfo.split('\n'):
-            if line.startswith('MemTotal:'):
+        for line in meminfo.split("\n"):
+            if line.startswith("MemTotal:"):
                 # 提取内存大小（单位：KB）
                 mem_kb = int(line.split()[1])
                 mem_gb = mem_kb / (1024 * 1024)
-                return {'total': round(mem_gb, 2), 'available': round(mem_gb, 2)}
+                return {"total": round(mem_gb, 2), "available": round(mem_gb, 2)}
 
     # 尝试使用psutil（如果已安装）
     try:
         import psutil
+
         mem = psutil.virtual_memory()
-        return {
-            'total': round(mem.total / (1024**3), 2),
-            'available': round(mem.available / (1024**3), 2)
-        }
+        return {"total": round(mem.total / (1024**3), 2), "available": round(mem.available / (1024**3), 2)}
     except ImportError:
         pass
 
@@ -66,7 +64,7 @@ def get_memory_info() -> Dict[str, float]:
     log_msg("ERROR", "Failed to get memory info: /proc/meminfo parsing failed and psutil not available")
 
 
-def get_gpu_info() -> Optional[str]:
+def get_gpu_info() -> str | None:
     """
     获取GPU信息
 
@@ -79,10 +77,10 @@ def get_gpu_info() -> Optional[str]:
     """
     # 尝试使用nvidia-smi命令
     result = subprocess.run(
-        ['nvidia-smi', '--query-gpu=name,memory.total', '--format=csv,noheader'],
+        ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
         capture_output=True,
         text=True,
-        timeout=5
+        timeout=5,
     )
 
     if result.returncode != 0:
@@ -107,12 +105,12 @@ def get_gpu_info() -> Optional[str]:
         return None
 
     # 解析输出
-    lines = result.stdout.strip().split('\n')
+    lines = result.stdout.strip().split("\n")
     gpu_list = []
 
     for line in lines:
         if line.strip():
-            parts = line.split(',')
+            parts = line.split(",")
             if len(parts) >= 2:
                 gpu_name = parts[0].strip()
                 gpu_memory = parts[1].strip()
@@ -146,10 +144,7 @@ def get_hardware_description() -> str:
     gpu_info = get_gpu_info()
 
     # 第二阶段：构建描述字符串
-    description_parts = [
-        f"CPU: {cpu_count} cores",
-        f"RAM: {int(memory_info['total'])}GB"
-    ]
+    description_parts = [f"CPU: {cpu_count} cores", f"RAM: {int(memory_info['total'])}GB"]
 
     if gpu_info:
         description_parts.append(f"GPU: {gpu_info}")
@@ -157,7 +152,7 @@ def get_hardware_description() -> str:
     return ", ".join(description_parts)
 
 
-def get_conda_packages(env_name: Optional[str] = None) -> str:
+def get_conda_packages(env_name: str | None = None) -> str:
     """
     获取特定conda虚拟环境中所有包的叙述式摘要
 
@@ -186,13 +181,8 @@ def get_conda_packages(env_name: Optional[str] = None) -> str:
         # 第一阶段：构建并验证conda命令参数
         if env_name:
             # 检查指定环境是否存在
-            check_cmd = ['conda', 'env', 'list']
-            result = subprocess.run(
-                check_cmd,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            check_cmd = ["conda", "env", "list"]
+            result = subprocess.run(check_cmd, capture_output=True, text=True, timeout=10)
 
             if result.returncode != 0:
                 log_msg("ERROR", f"Failed to execute conda env list command: {result.stderr}")
@@ -202,25 +192,20 @@ def get_conda_packages(env_name: Optional[str] = None) -> str:
                 log_msg("ERROR", f"Conda environment '{env_name}' does not exist")
 
             # 获取指定环境的包列表
-            cmd = ['conda', 'list', '--name', env_name, '--json']
+            cmd = ["conda", "list", "--name", env_name, "--json"]
         else:
             # 获取当前激活环境的包列表
-            cmd = ['conda', 'list', '--json']
+            cmd = ["conda", "list", "--json"]
 
         # 第二阶段：执行conda list命令
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=15
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
 
         if result.returncode != 0:
             log_msg("ERROR", f"Failed to execute conda list command: {result.stderr}")
 
         # 第三阶段：解析JSON输出
         try:
-            packages_data: List[Dict[str, Any]] = json.loads(result.stdout)
+            packages_data: list[dict[str, Any]] = json.loads(result.stdout)
         except json.JSONDecodeError as e:
             log_msg("ERROR", f"Failed to parse conda list output: {e}")
 
@@ -228,61 +213,76 @@ def get_conda_packages(env_name: Optional[str] = None) -> str:
             log_msg("ERROR", "Incorrect data format returned by conda list")
 
         # 第四阶段：整理Python信息与包列表
-        python_info: Optional[Dict[str, Optional[str]]] = None
-        packages_list: List[Dict[str, Optional[str]]] = []
+        python_info: dict[str, str | None] | None = None
+        packages_list: list[dict[str, str | None]] = []
         channel_counter: Counter[str] = Counter()
-        highlighted_packages: List[Tuple[str, str]] = []
+        highlighted_packages: list[tuple[str, str]] = []
 
         for package in packages_data:
-            name = package.get('name')
+            name = package.get("name")
             if not name:
                 continue
 
-            version = package.get('version', 'unknown')
-            build_string = package.get('build_string') or package.get('build')
-            channel = package.get('channel')
+            version = package.get("version", "unknown")
+            build_string = package.get("build_string") or package.get("build")
+            channel = package.get("channel")
             signature = f"{name} {version}"
 
-            channel_label = channel or 'unknown'
+            channel_label = channel or "unknown"
             channel_counter[channel_label] += 1
 
-            package_payload: Dict[str, Optional[str]] = {
-                'name': name,
-                'version': version,
-                'build_string': build_string or None,
-                'channel': channel or None,
-                'signature': signature
+            package_payload: dict[str, str | None] = {
+                "name": name,
+                "version": version,
+                "build_string": build_string or None,
+                "channel": channel or None,
+                "signature": signature,
             }
             packages_list.append(package_payload)
 
-            if name.lower() == 'python':
+            if name.lower() == "python":
                 python_info = dict(package_payload)
-            elif name.lower() in {'numpy', 'pandas', 'scipy', 'scikit-learn', 'torch', 'torchvision', 'tensorflow', 'xgboost', 'lightgbm'}:
+            elif name.lower() in {
+                "numpy",
+                "pandas",
+                "scipy",
+                "scikit-learn",
+                "torch",
+                "torchvision",
+                "tensorflow",
+                "xgboost",
+                "lightgbm",
+            }:
                 highlighted_packages.append((name, signature))
 
-        packages_list.sort(key=lambda item: (item['name'] or '').lower())
+        packages_list.sort(key=lambda item: (item["name"] or "").lower())
         highlighted_packages = sorted(set(highlighted_packages), key=lambda item: item[0])
 
         # 第五阶段：构建AI友好输出结构
-        environment_name = env_name or 'current'
+        environment_name = env_name or "current"
         package_total = len(packages_list)
-        channel_description = ", ".join(
-            f"{channel}({count})"
-            for channel, count in sorted(channel_counter.items())
-        ) if channel_counter else "unknown source"
+        channel_description = (
+            ", ".join(f"{channel}({count})" for channel, count in sorted(channel_counter.items()))
+            if channel_counter
+            else "unknown source"
+        )
 
-        python_signature = python_info.get('signature') if python_info else 'python unknown'
-        python_build = python_info.get('build_string') if python_info else None
+        python_signature = python_info.get("signature") if python_info else "python unknown"
+        python_build = python_info.get("build_string") if python_info else None
 
         core_packages = [signature for _, signature in highlighted_packages[:6]]
         remaining_count = max(len(highlighted_packages) - len(core_packages), 0)
 
-        torch_info = next((signature for name, signature in highlighted_packages if name.lower() == 'torch'), None)
-        torchvision_info = next((signature for name, signature in highlighted_packages if name.lower() == 'torchvision'), None)
-        tensorflow_info = next((signature for name, signature in highlighted_packages if name.lower() == 'tensorflow'), None)
+        torch_info = next((signature for name, signature in highlighted_packages if name.lower() == "torch"), None)
+        torchvision_info = next(
+            (signature for name, signature in highlighted_packages if name.lower() == "torchvision"), None
+        )
+        tensorflow_info = next(
+            (signature for name, signature in highlighted_packages if name.lower() == "tensorflow"), None
+        )
 
         # 第六阶段：拼装自然语言描述
-        description_parts: List[str] = []
+        description_parts: list[str] = []
         description_parts.append(
             f"Current Conda environment '{environment_name}' contains {package_total} packages, Python version is {python_signature}"
             + (f" (build: {python_build})" if python_build else "")
@@ -295,7 +295,9 @@ def get_conda_packages(env_name: Optional[str] = None) -> str:
                 core_packages_text += f", {remaining_count} other core dependencies omitted"
             description_parts.append(f"Common research and ML components are ready, including {core_packages_text}.")
         else:
-            description_parts.append("No common research or ML components identified, please check full package list if needed.")
+            description_parts.append(
+                "No common research or ML components identified, please check full package list if needed."
+            )
 
         if torch_info:
             torch_sentence = f"It is recommended to prioritize PyTorch ecosystem for neural network tasks ({torch_info}"
@@ -306,9 +308,13 @@ def get_conda_packages(env_name: Optional[str] = None) -> str:
                 torch_sentence += f" In comparison, TensorFlow ({tensorflow_info}) can be used as an alternative."
             description_parts.append(torch_sentence)
         elif tensorflow_info:
-            description_parts.append(f"TensorFlow ecosystem ({tensorflow_info}) is available, check for extra installation if PyTorch is needed.")
+            description_parts.append(
+                f"TensorFlow ecosystem ({tensorflow_info}) is available, check for extra installation if PyTorch is needed."
+            )
 
-        description_parts.append("If you need dependencies not listed, import them directly; the environment pre-installs all common scientific computing libraries.")
+        description_parts.append(
+            "If you need dependencies not listed, import them directly; the environment pre-installs all common scientific computing libraries."
+        )
 
         return " ".join(description_parts)
 

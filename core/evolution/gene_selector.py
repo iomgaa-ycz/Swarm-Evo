@@ -11,22 +11,20 @@ Top-1 selected per locus.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Any
 from collections import deque
+from dataclasses import dataclass
+from typing import Any
 
-import numpy as np
 import faiss
 
-from utils.logger_system import log_msg
-
-from core.execution.journal import Journal, Node
 from core.evolution.embedding_manager import CodeEmbeddingManager
 from core.evolution.gene_registry import (
     GeneRegistry,
     compute_gene_id,
     normalize_gene_text,
 )
+from core.execution.journal import Journal, Node
+from utils.logger_system import log_msg
 
 # =========================
 # Constants & Hyperparams
@@ -46,7 +44,7 @@ ALL_LOCI = list(LOCUS_TO_FIELD.keys())
 
 DEFAULT_INIT_PHEROMONE = 0.1
 
-# Quality blend 
+# Quality blend
 QUALITY_BLEND = 0.3
 
 # Diversity strength (λ)
@@ -65,7 +63,7 @@ embedding_manager = CodeEmbeddingManager()
 # Recent selected buffer
 # =========================
 
-RECENT_SELECTED: Dict[str, deque[str]] = {
+RECENT_SELECTED: dict[str, deque[str]] = {
     locus: deque(maxlen=RECENT_WINDOW)
     for locus in ALL_LOCI
 }
@@ -96,9 +94,9 @@ def select_gene_plan(
     journal: Journal,
     gene_registry: GeneRegistry,
     current_step: int,
-    # use_dpp: bool = False,   
-    # dpp_k: int = 1,          
-) -> Dict[str, Any]:
+    # use_dpp: bool = False,
+    # dpp_k: int = 1,
+) -> dict[str, Any]:
     """
     Select a merge-compatible gene plan using
     Quality–Diversity top-1 per locus.
@@ -112,7 +110,7 @@ def select_gene_plan(
             f"genes={[i.gene_id[:6] for i in items]}"
         )
 
-    winners: Dict[str, GeneItem] = {}
+    winners: dict[str, GeneItem] = {}
     for locus in ALL_LOCI:
         items = pools.get(locus, [])
         if not items:
@@ -120,7 +118,7 @@ def select_gene_plan(
         winner = _select_locus_winner(items)
         winners[locus] = winner
 
-    gene_plan: Dict[str, Any] = {
+    gene_plan: dict[str, Any] = {
         "reasoning": (
             "Per-locus selection: Top-1 by "
             "Quality–Diversity score "
@@ -148,8 +146,8 @@ def select_gene_plan(
 def build_decision_gene_pools(
     journal: Journal,
     gene_registry: GeneRegistry,
-) -> Dict[str, List[GeneItem]]:
-    pools: Dict[str, Dict[str, GeneItem]] = {locus: {} for locus in ALL_LOCI}
+) -> dict[str, list[GeneItem]]:
+    pools: dict[str, dict[str, GeneItem]] = {locus: {} for locus in ALL_LOCI}
 
     for node in journal.nodes.values():
         if not _is_valid_node(node):
@@ -197,7 +195,7 @@ def build_decision_gene_pools(
 # Core selection logic
 # =========================
 
-def _select_locus_winner(items: List[GeneItem]) -> GeneItem:
+def _select_locus_winner(items: list[GeneItem]) -> GeneItem:
     """
     Select top-1 gene for a locus using:
     final_score = quality + DIVERSITY_WEIGHT * (1 - max_sim)
@@ -208,7 +206,7 @@ def _select_locus_winner(items: List[GeneItem]) -> GeneItem:
     # Prepare recent reference texts
     # -----------------------------
     recent_gene_ids = list(RECENT_SELECTED[locus])
-    recent_texts: List[str] = []
+    recent_texts: list[str] = []
 
     if recent_gene_ids:
         content_map = {item.gene_id: item.content for item in items}

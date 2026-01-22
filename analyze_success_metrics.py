@@ -3,11 +3,11 @@ import json
 file_path = '/home/iomgaa/Code/Swarm-Evo/workspace/logs/metrics.json'
 
 try:
-    with open(file_path, 'r') as f:
+    with open(file_path) as f:
         data = json.load(f)
-    
+
     print(f"Total entries: {len(data)}")
-    
+
     success_count = 0
     for i, entry in enumerate(data):
         observation_str = entry.get('observation', '{}')
@@ -16,7 +16,7 @@ try:
                 obs = json.loads(observation_str)
             else:
                 obs = observation_str
-            
+
             if isinstance(obs, dict):
                  if obs.get('ok') is True:
                      success_count += 1
@@ -25,7 +25,7 @@ try:
                      if obs_data:
                          if isinstance(obs_data, dict):
                              if obs_data.get('type') == 'WriteFileResult':
-                                 print(f"Type: WriteFile")
+                                 print("Type: WriteFile")
                                  print(f"Path: {obs_data.get('path')}")
                              else:
                                  print(f"Type: {obs_data.get('type', 'Unknown')}")
@@ -33,7 +33,7 @@ try:
                                  print(f"Output: {preview}...")
                          else:
                              print(f"Data: {str(obs_data)[:200]}")
-        except Exception as e:
+        except Exception:
             pass
 
     print(f"\\nTotal successful entries: {success_count}")

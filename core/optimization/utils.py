@@ -4,11 +4,13 @@
 提供LLM响应解析、消息构建等公共功能
 """
 
-from typing import Dict, List, Any, Optional
 import json
 from pathlib import Path
+from typing import Any
+
 from jinja2 import Template
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from utils.logger_system import log_msg
 
 
@@ -16,7 +18,7 @@ class LLMResponseParser:
     """LLM响应解析器"""
 
     @staticmethod
-    def extract_json_from_response(response_content: str) -> Optional[Dict[str, Any]]:
+    def extract_json_from_response(response_content: str) -> dict[str, Any] | None:
         """
         从LLM响应中提取JSON数据
 
@@ -70,9 +72,9 @@ class MessageBuilder:
     @staticmethod
     def build_llm_messages(
         template_content: str,
-        template_vars: Dict[str, Any],
+        template_vars: dict[str, Any],
         human_message: str
-    ) -> List:
+    ) -> list:
         """
         构建标准的LLM消息
 
@@ -98,7 +100,7 @@ class FileSaver:
 
     @staticmethod
     def save_result_to_json(
-        result: Dict[str, Any],
+        result: dict[str, Any],
         filename: str,
         storage_dir: str = "workspace/logs",
         result_type: str = "result"

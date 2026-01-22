@@ -5,11 +5,11 @@ Agent Pool 模块。
 已重构以支持 LangGraph 架构。
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 
-from core.agent.base_agent import BaseReActAgent, create_agent
+from core.agent.base_agent import BaseReActAgent
 from core.agent.prompt_manager import PromptManager
 from core.agent.tools import get_tools
 from utils.logger_system import log_msg
@@ -29,14 +29,14 @@ class AgentPool:
     - 不再负责 orchestration / run_async
     """
 
-    def __init__(self, llm: Optional[BaseChatModel] = None):
+    def __init__(self, llm: BaseChatModel | None = None):
         """
         初始化 AgentPool。
 
         参数:
             llm: LangChain Chat Model 实例。
         """
-        self.agents: Dict[str, BaseReActAgent] = {}
+        self.agents: dict[str, BaseReActAgent] = {}
         self.llm = llm
 
     def add(self, agent: BaseReActAgent) -> None:
@@ -67,7 +67,7 @@ class AgentPool:
             raise KeyError(f"Agent '{name}' not found in pool")
         return self.agents[name]
 
-    def list_agents(self) -> List[str]:
+    def list_agents(self) -> list[str]:
         """
         列出所有已注册的 Agent 名称。
 
@@ -80,7 +80,7 @@ class AgentPool:
     def from_configs(
         cls,
         agents_num: int,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         llm: BaseChatModel,
     ) -> "AgentPool":
         """

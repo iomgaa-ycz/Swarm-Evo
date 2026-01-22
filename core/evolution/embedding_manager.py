@@ -4,8 +4,6 @@ Utility for computing normalized code embeddings using BGE-m3.
 
 from __future__ import annotations
 
-from typing import List, Dict
-
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -18,7 +16,7 @@ class CodeEmbeddingManager:
 
     def __init__(self) -> None:
         # text -> embedding
-        self._cache: Dict[str, np.ndarray] = {}
+        self._cache: dict[str, np.ndarray] = {}
 
     @classmethod
     def _ensure_model(cls) -> None:
@@ -26,7 +24,7 @@ class CodeEmbeddingManager:
             cls._model = SentenceTransformer(cls._model_name)
             cls._model.eval()
 
-    def embed_texts(self, texts: List[str]) -> np.ndarray:
+    def embed_texts(self, texts: list[str]) -> np.ndarray:
         """
         Return L2-normalized embeddings for the provided texts.
         Suitable for FAISS IndexFlatIP / DPP kernels.
@@ -42,7 +40,7 @@ class CodeEmbeddingManager:
                 cached_embeddings.append(self._cache[text])
             else:
                 cached_embeddings.append(None)
-                
+
                 missing_texts.append(f"code:\n{text}")
 
         if missing_texts:
@@ -52,7 +50,7 @@ class CodeEmbeddingManager:
                 missing_texts,
                 batch_size=8,
                 show_progress_bar=False,
-                normalize_embeddings=True,  
+                normalize_embeddings=True,
             )
 
             embeddings = embeddings.astype(np.float32)

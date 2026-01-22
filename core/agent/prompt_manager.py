@@ -9,13 +9,13 @@ Prompt 管理模块，负责拼装动态补充信息。
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 from jinja2 import Template
-from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from utils.logger_system import log_msg
 from utils.directory_tree_generator import DirectoryTreeGenerator
+from utils.logger_system import log_msg
 from utils.system_info import get_hardware_description
 
 
@@ -23,7 +23,7 @@ from utils.system_info import get_hardware_description
 class PromptContext:
     """
     提示上下文数据结构，描述动态变量与运行阶段。
-    
+
     所有任务类型 (explore, select, merge, review, evaluate) 共享此结构，
     不同任务类型只使用其相关字段。
     """
@@ -38,31 +38,31 @@ class PromptContext:
     remaining_seconds: float
     conda_packages: str
     task_description: str
-    step_limit: Optional[int] = None
+    step_limit: int | None = None
 
     # ========== 控制字段 ==========
     # 决定使用哪个模板，如 "explore_user_prompt.j2"
-    template_name: Optional[str] = None
+    template_name: str | None = None
 
     # ========== Explore 任务字段 ==========
-    parent_code: Optional[str] = None
-    parent_feedback: Optional[str] = None
-    parent_history: Optional[str] = None
-    parent_score: Optional[float] = None
+    parent_code: str | None = None
+    parent_feedback: str | None = None
+    parent_history: str | None = None
+    parent_score: float | None = None
 
     # ========== Merge/Select 任务字段 ==========
-    candidates: Optional[Dict[str, str]] = None
-    gene_plan: Optional[Dict[str, Any]] = None
+    candidates: dict[str, str] | None = None
+    gene_plan: dict[str, Any] | None = None
 
     # ========== Evaluate 任务字段 ==========
-    solution_code: Optional[str] = None
-    execution_logs: Optional[str] = None
+    solution_code: str | None = None
+    execution_logs: str | None = None
 
 
 class PromptManager:
     """
     提示词管理器，负责拼接动态补充信息与模板注入。
-    
+
     重构后的核心变化：
     - build_system_message(): 返回 SystemMessage 对象
     - build_initial_messages(): 返回完整的初始消息列表 [SystemMessage, HumanMessage]
@@ -80,19 +80,19 @@ class PromptManager:
             template_dir: 外置模板目录，默认使用 benchmark/mle-bench/prompt_templates。
         """
         self._template_dir = Path(template_dir)
-        self._templates: Dict[str, str] = {}
+        self._templates: dict[str, str] = {}
         self._load_all_templates()
 
     def _load_all_templates(self) -> None:
         """从文件系统加载所有模板到内存。"""
         for template_file in self._template_dir.glob("*.j2"):
-            with open(template_file, "r", encoding="utf-8") as f:
+            with open(template_file, encoding="utf-8") as f:
                 self._templates[template_file.name] = f.read()
 
     def _get_template(self, name: str) -> Template:
         """
         获取模板对象。
-        
+
         从内存中的_templates获取模板字符串并创建jinja2.Template对象。
         如果模板不存在，通过log_msg记录错误并抛出异常。
 
@@ -148,7 +148,7 @@ class PromptManager:
         if not template_path.exists():
             log_msg("ERROR", f"基础模板文件 '{name}' 不存在")
             raise FileNotFoundError(f"Template file '{name}' not found")
-        with open(template_path, "r", encoding="utf-8") as f:
+        with open(template_path, encoding="utf-8") as f:
             self._templates[name] = f.read()
 
     # ========================================================================
@@ -182,7 +182,7 @@ class PromptManager:
 
         return SystemMessage(content=rendered_content)
 
-    def build_initial_messages(self, context: PromptContext, task_instruction: str) -> List[BaseMessage]:
+    def build_initial_messages(self, context: PromptContext, task_instruction: str) -> list[BaseMessage]:
         """
         构建初始消息列表，用于 LangGraph 的 input。
 
@@ -201,7 +201,7 @@ class PromptManager:
         human_msg = HumanMessage(content=task_instruction)
         return [system_msg, human_msg]
 
-    def _prepare_render_variables(self, context: PromptContext) -> Dict[str, Any]:
+    def _prepare_render_variables(self, context: PromptContext) -> dict[str, Any]:
         """
         准备模板渲染所需的所有变量。
 
@@ -227,7 +227,7 @@ class PromptManager:
         file_previews = {}
         try:
             tree_gen = DirectoryTreeGenerator(
-                workspace_root, 
+                workspace_root,
                 ignore_patterns=['.git', '__pycache__', "agent"]
             )
             directory_tree, file_previews = tree_gen.generate()
@@ -273,10 +273,10 @@ class PromptManager:
     # 兼容性方法：保留旧接口以支持渐进迁移
     # ========================================================================
 
-    def build_system_prompt(self, context: Optional[PromptContext] = None) -> str:
+    def build_system_prompt(self, context: PromptContext | None = None) -> str:
         """
         构建 System Prompt 字符串。
-        
+
         [兼容性方法] 保留以支持旧代码。
         建议使用 build_system_message() 代替。
         """
@@ -298,11 +298,11 @@ class PromptManager:
         """
         template_name = context.template_name or "explore_user_prompt.j2"
         template = self._get_template(template_name)
-        
+
         render_vars = self._prepare_render_variables(context)
         # 兼容旧接口：手动添加 history_block
         render_vars["history_block"] = self._build_history_block(history)
-        
+
         return template.render(**render_vars)
 
     def _build_history_block(self, history: str) -> str:

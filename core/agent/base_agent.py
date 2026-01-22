@@ -8,25 +8,24 @@
 - 状态可持久化，支持中断和恢复
 """
 
-from typing import Dict, List, Any, Optional, Annotated, Sequence, TypedDict, Literal, Union
 import operator
+from collections.abc import Sequence
+from typing import Annotated, Any, Literal, TypedDict
 
+from langchain.tools import BaseTool
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
-    BaseMessage, 
-    SystemMessage, 
-    HumanMessage, 
     AIMessage,
+    BaseMessage,
     ToolMessage,
 )
-from langchain_core.language_models import BaseChatModel
-from langchain.tools import BaseTool
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from core.agent.prompt_manager import PromptManager, PromptContext
+from core.agent.prompt_manager import PromptContext, PromptManager
 from core.agent.tools import get_tools
-from utils.logger_system import log_msg, log_json
 from utils.json_utils import parse_json_output
+from utils.logger_system import log_json, log_msg
 
 
 # ============================================================================
@@ -35,7 +34,7 @@ from utils.json_utils import parse_json_output
 class AgentState(TypedDict):
     """
     Agent 状态定义。
-    
+
     使用 TypedDict 定义强类型状态，LangGraph 会自动处理状态更新。
     """
     # 消息历史列表，使用 add operator 实现追加
@@ -49,7 +48,7 @@ class AgentState(TypedDict):
     # 任务是否成功完成
     success: bool
     # 最终答案 (如果有)
-    final_answer: Optional[Dict[str, Any]]
+    final_answer: dict[str, Any] | None
 
 
 # ============================================================================
@@ -57,11 +56,11 @@ class AgentState(TypedDict):
 # ============================================================================
 class AgentSessionResult:
     """Agent 执行结果，保持与旧代码兼容。"""
-    
+
     def __init__(
-        self, 
-        final_answer: Optional[Dict[str, Any]], 
-        history: List[Dict[str, Any]], 
+        self,
+        final_answer: dict[str, Any] | None,
+        history: list[dict[str, Any]],
         success: bool
     ):
         self.final_answer = final_answer
@@ -75,7 +74,7 @@ class AgentSessionResult:
 class AgentGraphBuilder:
     """
     Agent 图构建器。
-    
+
     负责创建和编译 LangGraph StateGraph。
     """
 
@@ -83,7 +82,7 @@ class AgentGraphBuilder:
         self,
         name: str,
         llm: BaseChatModel,
-        tools: List[BaseTool],
+        tools: list[BaseTool],
         max_steps: int = 16,
     ):
         """
@@ -98,10 +97,10 @@ class AgentGraphBuilder:
         self.name = name
         self.tools = tools
         self.max_steps = max_steps
-        
+
         # 绑定工具到 LLM
         self.llm_with_tools = llm.bind_tools(tools)
-        
+
         # 工具节点
         self.tool_node = ToolNode(tools)
 
@@ -125,7 +124,7 @@ class AgentGraphBuilder:
 
         # 获取最后一条消息
         last_message = messages[-1] if messages else None
-        
+
         if last_message is None:
             return "end"
 
@@ -135,7 +134,7 @@ class AgentGraphBuilder:
 
         return "end"
 
-    def _call_model(self, state: AgentState) -> Dict[str, Any]:
+    def _call_model(self, state: AgentState) -> dict[str, Any]:
         """
         调用 LLM 节点。
 
@@ -151,7 +150,7 @@ class AgentGraphBuilder:
 
         try:
             response = self.llm_with_tools.invoke(messages)
-            
+
             # 记录响应信息
             if isinstance(response, AIMessage):
                 # 准备 JSON 日志数据
@@ -182,7 +181,7 @@ class AgentGraphBuilder:
                     log_msg("INFO", f"Agent '{agent_name}' Step {step_count}: 调用 LLM，请求工具 {tool_calls_info} 成功")
                 else:
                     log_msg("INFO", f"Agent '{agent_name}' Step {step_count}: 调用 LLM，返回最终回复 成功")
-            
+
             return {
                 "messages": [response],
                 "step_count": step_count + 1,
@@ -203,7 +202,7 @@ class AgentGraphBuilder:
                 "step_count": step_count + 1,
             }
 
-    def _call_tools(self, state: AgentState) -> Dict[str, Any]:
+    def _call_tools(self, state: AgentState) -> dict[str, Any]:
         """
         调用工具节点。
 
@@ -211,25 +210,25 @@ class AgentGraphBuilder:
         """
         agent_name = state["agent_name"]
         messages = state["messages"]
-        
+
         # 获取最后一条消息（应该是 AIMessage with tool_calls）
         last_message = messages[-1] if messages else None
-        
+
         if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
             log_msg("WARNING", f"Agent '{agent_name}' 无工具调用")
             return {"messages": []}
-        
+
         # 构建工具字典
         tool_map = {tool.name: tool for tool in self.tools}
-        
+
         tool_messages = []
         for tool_call in last_message.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call["args"]
             tool_call_id = tool_call["id"]
-            
+
             # log_msg("INFO", f"Agent '{agent_name}' 执行工具: {tool_name}")
-            
+
             if tool_name not in tool_map:
                 error_content = f"未知工具: {tool_name}"
                 log_msg("ERROR", error_content)
@@ -238,7 +237,7 @@ class AgentGraphBuilder:
                     tool_call_id=tool_call_id
                 ))
                 continue
-            
+
             try:
                 tool = tool_map[tool_name]
                 # 直接调用工具
@@ -255,7 +254,7 @@ class AgentGraphBuilder:
                     content=error_content,
                     tool_call_id=tool_call_id
                 ))
-        
+
         return {"messages": tool_messages}
 
     def build(self) -> StateGraph:
@@ -306,10 +305,10 @@ class BaseReActAgent:
         self,
         name: str,
         llm: BaseChatModel,
-        tools: List[BaseTool],
+        tools: list[BaseTool],
         prompt_manager: PromptManager,
         max_steps: int = 16,
-        accepted_return_types: Optional[List[str]] = None,
+        accepted_return_types: list[str] | None = None,
     ):
         """
         初始化 Agent。
@@ -339,10 +338,10 @@ class BaseReActAgent:
         self.graph = builder.build()
 
     async def run(
-        self, 
-        task_instruction: str, 
+        self,
+        task_instruction: str,
         prompt_context: PromptContext,
-        max_steps: Optional[int] = None
+        max_steps: int | None = None
     ) -> AgentSessionResult:
         """
         执行 Agent 任务。
@@ -379,7 +378,7 @@ class BaseReActAgent:
             # 执行图
             # 设置 recursion_limit 为 max_steps * 3，确保能覆盖 Agent->Tools->Agent 循环
             final_state = await self.graph.ainvoke(
-                initial_state, 
+                initial_state,
                 config={"recursion_limit": current_max_steps * 3 + 2}
             )
 
@@ -433,7 +432,7 @@ class BaseReActAgent:
                 success=False
             )
 
-    def _extract_history(self, messages: Sequence[BaseMessage]) -> List[Dict[str, Any]]:
+    def _extract_history(self, messages: Sequence[BaseMessage]) -> list[dict[str, Any]]:
         """
         从消息列表中提取历史记录。
 
@@ -461,7 +460,7 @@ class BaseReActAgent:
 
         return history
 
-    async def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def __call__(self, state: dict[str, Any]) -> dict[str, Any]:
         """
         LangGraph 节点入口 (兼容旧接口)。
 
@@ -502,7 +501,7 @@ def create_agent(
     name: str,
     llm: BaseChatModel,
     conda_env_name: str,
-    prompt_manager: Optional[PromptManager] = None,
+    prompt_manager: PromptManager | None = None,
     max_steps: int = 16,
 ) -> BaseReActAgent:
     """

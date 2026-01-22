@@ -1,19 +1,18 @@
 import asyncio
-import shutil
-import os
 import json
+import os
+import shutil
 import zipfile
 from pathlib import Path
 
-from utils.config import get_config
-from utils.system_info import get_conda_packages
-from utils.build_workspace import build_workspace
-from utils.logger_system import LoggerSystem, init_logger, logger, log_msg
 from core.agent.agent_pool import AgentPool
-from core.execution.pipeline import Pipeline
-from core.execution.journal import Journal
 from core.execution.iteration_controller import IterationController
-from utils.logger_system import logger as global_logger 
+from core.execution.journal import Journal
+from core.execution.pipeline import Pipeline
+from utils.build_workspace import build_workspace
+from utils.config import get_config
+from utils.logger_system import init_logger, log_msg
+from utils.system_info import get_conda_packages
 
 
 async def main_mle_bench_competition() -> None:
@@ -29,7 +28,7 @@ async def main_mle_bench_competition() -> None:
         6. 创建IterationController并运行竞赛
         7. 展示执行结果
     """
-    
+
     # 提前加载配置，因为构建workspace也需要config
     try:
         config = get_config()
@@ -85,11 +84,11 @@ async def main_mle_bench_competition() -> None:
     except Exception as e:
         log_msg("ERROR", f"获取系统环境信息失败: {e}")
         return
-    
+
     try:
         # 第五阶段：创建AgentPool
         log_msg("INFO", "\n[5/7] 创建AgentPool...")
-        
+
         # 1. 初始化 LLM 客户端 (使用 LangChain 适配器)
         llm = config.create_langchain_llm()
 
@@ -97,8 +96,8 @@ async def main_mle_bench_competition() -> None:
         agent_config_path = Path("core/config/agent.json")
         if not agent_config_path.exists():
              log_msg("ERROR", f"Agent配置文件未找到: {agent_config_path}")
-        
-        with open(agent_config_path, "r", encoding="utf-8") as f:
+
+        with open(agent_config_path, encoding="utf-8") as f:
             agent_config_dict = json.load(f)
 
         # 3. 补充环境配置
@@ -110,7 +109,7 @@ async def main_mle_bench_competition() -> None:
             config=agent_config_dict,
             llm=llm
         )
-        
+
         log_msg("INFO", f"✅ AgentPool 创建成功, 已注册 {config.agent_num} 个 Agent")
     except Exception as e:
         log_msg("ERROR", f"AgentPool 创建失败: {e}")
@@ -154,32 +153,32 @@ async def main_mle_bench_competition() -> None:
         best_node = journal.get_best_node()
         if best_node:
              log_msg("INFO", f"最佳方案 ID: {best_node.id}, Score: {best_node.score}")
-             
+
              # [NEW Logic] Extract archived solution and submission
              if best_node.archive_path and os.path.exists(best_node.archive_path):
                  final_submission_dir = os.path.join(config.mle_bench_workspace_dir, "final_submission")
                  os.makedirs(final_submission_dir, exist_ok=True)
-                 
+
                  try:
                      with zipfile.ZipFile(best_node.archive_path, 'r') as zip_ref:
                          zip_ref.extractall(final_submission_dir)
                      log_msg("INFO", f"✅ 最终结果已提取至: {final_submission_dir}")
-                     
+
                      # 可以在此处添加重命名逻辑，如果需要的话
                      # 比如把解压出来的 solution.py 重命名为 best_solution.py
-                     
+
                  except Exception as e:
                      log_msg("ERROR", f"提取最终结果失败: {e}")
              else:
                  log_msg("WARNING", "最佳方案未找到归档文件，仅显示 Score。")
-                 
+
         else:
              log_msg("WARNING", "未找到有效方案")
 
     except Exception as e:
         log_msg("ERROR", f"结果展示失败: {e}")
 
-    
+
 
 if __name__ == "__main__":
     print("\n🚀 启动MLE-bench竞赛自主执行系统\n")

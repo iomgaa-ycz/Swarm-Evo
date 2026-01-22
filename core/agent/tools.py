@@ -8,12 +8,11 @@ LangGraph 兼容的工具模块。
 from __future__ import annotations
 
 import os
-import shutil
 import select
+import shutil
 import signal
 import subprocess
 import time
-from typing import Optional, Type
 
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -34,22 +33,26 @@ MAX_STDERR_CHARS_FAILURE = 10000
 # ============================================================================
 class ListDirectoryInput(BaseModel):
     """list_directory 工具的输入参数。"""
+
     path: str = Field(description="要列举内容的目录路径 (绝对路径)")
 
 
 class ReadFileInput(BaseModel):
     """read_file 工具的输入参数。"""
+
     file_path: str = Field(description="要读取的文件路径 (绝对路径)")
 
 
 class WriteFileInput(BaseModel):
     """write_file 工具的输入参数。"""
+
     path: str = Field(description="要写入的文件路径 (绝对路径)")
     content: str = Field(description="要写入文件的完整文本内容")
 
 
 class TerminalInput(BaseModel):
     """terminal 工具的输入参数。"""
+
     command: str = Field(description="要执行的 shell 命令")
 
 
@@ -62,13 +65,14 @@ class ListDirectoryTool(BaseTool):
 
     自动截断超长列表，返回清晰的结构化文本。
     """
+
     name: str = "list_directory"
     description: str = (
         "List the contents of a directory. Returns file and folder names. "
         "Use this to explore the file system structure. "
         "Input: the absolute path to a directory."
     )
-    args_schema: Type[BaseModel] = ListDirectoryInput
+    args_schema: type[BaseModel] = ListDirectoryInput
 
     def _run(self, path: str) -> str:
         """列举目录内容。"""
@@ -88,10 +92,10 @@ class ListDirectoryTool(BaseTool):
         truncated = total > MAX_LIST_ITEMS
 
         result_lines = [f"Directory: {path}", f"Total items: {total}"]
-        
+
         if truncated:
             result_lines.append("(Summary view for > 20 items)")
-            
+
             # Categorize
             dirs = []
             files_by_ext = {}
@@ -102,7 +106,7 @@ class ListDirectoryTool(BaseTool):
                 if os.path.isdir(full_item_path):
                     dirs.append(item)
                 else:
-                    parts = item.rsplit('.', 1)
+                    parts = item.rsplit(".", 1)
                     if len(parts) > 1 and parts[0]:
                         ext = parts[1].lower()
                         if ext not in files_by_ext:
@@ -110,7 +114,7 @@ class ListDirectoryTool(BaseTool):
                         files_by_ext[ext].append(item)
                     else:
                         others.append(item)
-            
+
             # 1. Directories
             if dirs:
                 if len(dirs) < 5:
@@ -118,7 +122,7 @@ class ListDirectoryTool(BaseTool):
                     result_lines.extend(dirs)
                 else:
                     result_lines.append(f"📂 Directories ({len(dirs)} items)")
-            
+
             # 2. Files by extension
             for ext in sorted(files_by_ext.keys()):
                 f_list = files_by_ext[ext]
@@ -127,7 +131,7 @@ class ListDirectoryTool(BaseTool):
                     result_lines.extend(f_list)
                 else:
                     result_lines.append(f"📦 *.{ext} ({len(f_list)} files)")
-            
+
             # 3. Others
             if others:
                 if len(others) < 5:
@@ -149,13 +153,14 @@ class ReadFileTool(BaseTool):
 
     自动截断大文件，对代码文件有更高的截断阈值。
     """
+
     name: str = "read_file"
     description: str = (
         "Read the content of a file. Large files will be truncated. "
         "Python files (.py) have a higher truncation limit. "
         "Input: the absolute path to a file."
     )
-    args_schema: Type[BaseModel] = ReadFileInput
+    args_schema: type[BaseModel] = ReadFileInput
 
     def _run(self, file_path: str) -> str:
         """读取文件内容。"""
@@ -174,7 +179,7 @@ class ReadFileTool(BaseTool):
         limit = MAX_READFILE_CHARS_CODE if is_code_file else MAX_READFILE_CHARS_DEFAULT
 
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read(limit + 1)  # 读取多一个字符以判断是否截断
         except Exception as e:
             return f"[ERROR] Failed to read file: {e}"
@@ -203,13 +208,14 @@ class WriteFileTool(BaseTool):
     完全覆盖目标文件。如果目录不存在会自动创建。
     对 solution.py 文件会自动创建快照。
     """
+
     name: str = "write_file"
     description: str = (
         "Write content to a file, overwriting if it exists. "
         "Parent directories will be created automatically. "
         "Input: path (absolute path) and content (the text to write)."
     )
-    args_schema: Type[BaseModel] = WriteFileInput
+    args_schema: type[BaseModel] = WriteFileInput
 
     def _run(self, path: str, content: str) -> str:
         """写入文件。"""
@@ -264,6 +270,7 @@ class TerminalTool(BaseTool):
     自动激活指定的 Conda 环境，并执行命令。
     成功时截断输出，失败时返回完整 stderr 以便调试。
     """
+
     name: str = "terminal"
     description: str = (
         "Execute a shell command in the specified Conda environment. "
@@ -271,7 +278,7 @@ class TerminalTool(BaseTool):
         "The command will be executed in a bash shell with the Conda environment activated. "
         "Input: the command to execute."
     )
-    args_schema: Type[BaseModel] = TerminalInput
+    args_schema: type[BaseModel] = TerminalInput
 
     # 配置参数
     conda_env_name: str = ""
@@ -310,12 +317,12 @@ class TerminalTool(BaseTool):
             write_needed = True
             if os.path.exists(wrapper_path):
                 try:
-                    with open(wrapper_path, "r") as f:
+                    with open(wrapper_path) as f:
                         if f.read().strip() == script_content.strip():
                             write_needed = False
                 except Exception:
                     pass
-            
+
             if write_needed:
                 try:
                     with open(wrapper_path, "w") as f:
@@ -359,10 +366,10 @@ class TerminalTool(BaseTool):
         stdout_chunks = []
         stderr_chunks = []
         start_time = time.time()
-        
+
         # 防御性初始化 PGID，防止 UnboundLocalError
         pgid = None
-        
+
         try:
             # start_new_session=True 用于创建新的进程组
             # 这允许我们在超时时杀死整个进程组，防止僵尸管道
@@ -381,20 +388,22 @@ class TerminalTool(BaseTool):
             # 定义宽限期：主进程退出后，最多再读 1 秒
             grace_period = 1.0
             exit_time = None
-            
+
             while True:
                 # 1. 检查超时
                 if time.time() - start_time > timeout:
                     raise subprocess.TimeoutExpired(proc.args, timeout)
-                
+
                 # 2. 检查主进程状态
                 return_code = proc.poll()
-                
+
                 # 3. 准备 select 列表
                 reads = []
-                if proc.stdout: reads.append(proc.stdout)
-                if proc.stderr: reads.append(proc.stderr)
-                
+                if proc.stdout:
+                    reads.append(proc.stdout)
+                if proc.stderr:
+                    reads.append(proc.stderr)
+
                 # 如果没有可读的（例如管道已关），且进程已退出，结束
                 if not reads and return_code is not None:
                     break
@@ -405,9 +414,9 @@ class TerminalTool(BaseTool):
                 except ValueError:
                     # Select failed (possibly file descriptor closed), break loop if process done
                     if return_code is not None:
-                         break
+                        break
                     else:
-                        continue # Retry
+                        continue  # Retry
 
                 # 5. 读取数据
                 for f in readable:
@@ -416,39 +425,41 @@ class TerminalTool(BaseTool):
                         # read() on TextIOWrapper 可能会即使 select 可读也阻塞（因为缓冲或解码）
                         fd = f.fileno()
                         b_chunk = os.read(fd, 4096)
-                        
+
                         if not b_chunk:
                             # EOF received (empty bytes)
                             pass
                         else:
-                            chunk = b_chunk.decode('utf-8', errors='replace')
+                            chunk = b_chunk.decode("utf-8", errors="replace")
                             if f is proc.stdout:
                                 stdout_chunks.append(chunk)
                             else:
                                 stderr_chunks.append(chunk)
                     except OSError:
                         pass
-                    except Exception as e:
-                       pass
-                
+                    except Exception:
+                        pass
+
                 # 6. 退出条件判断
                 if return_code is not None:
                     if exit_time is None:
                         exit_time = time.time()
-                    
+
                     # 如果超过宽限期，强制退出循环
                     if time.time() - exit_time > grace_period:
                         break
-                    
+
                     # 另外如果 readable 为空（管道已空/关闭），也退出
                     # 但为了保险（数据在内核缓冲），我们主要依赖宽限期或 EOF
                     if not readable:
-                         pass
-                    
+                        pass
+
             # 循环结束后，确保关闭管道防止 ResourceWarning
-            if proc.stdout: proc.stdout.close()
-            if proc.stderr: proc.stderr.close()
-            
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+
             # 手动清理：确保所有子进程（僵尸）都被杀掉
             # 无论成功失败，既然主任务结束了，就清理现场
             if pgid is not None:
@@ -468,14 +479,14 @@ class TerminalTool(BaseTool):
                     os.killpg(pgid, signal.SIGKILL)
                 except Exception:
                     pass
-            
+
             return (
                 f"[ERROR] Command timed out after {timeout} seconds.\n"
                 f"Command: {command}\n"
                 f"Partial stdout:\n{self._truncate(''.join(stdout_chunks), MAX_STDOUT_CHARS)}\n"
                 f"Partial stderr:\n{self._truncate(''.join(stderr_chunks), MAX_STDERR_CHARS)}"
             )
-            
+
         except Exception as e:
             return f"[ERROR] Failed to execute command: {e}"
 
@@ -521,14 +532,14 @@ class TerminalTool(BaseTool):
         """
         if not text or len(text) <= max_chars:
             return text
-        
+
         head_len = int(max_chars * 0.2)
         tail_len = int(max_chars * 0.8)
-        
+
         # 确保中间至少省略了一些内容，否则没必要截断
         if head_len + tail_len >= len(text):
-           return text
-           
+            return text
+
         return (
             f"{text[:head_len]}\n"
             f"... [Output Truncated: omitted {len(text) - (head_len + tail_len)} chars] ...\n"

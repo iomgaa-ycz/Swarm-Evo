@@ -4,25 +4,26 @@ Agent版本管理器模块
 用于记录和管理每个Agent的prompt版本历史、性能数据和反思建议。
 """
 
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
-import json
-from pathlib import Path
 import asyncio
+import json
 import time
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 from utils.logger_system import log_msg
 
 
 @dataclass
 class NodeMetadata:
     """单个Node的Review结果"""
-    score: Optional[float]                              # Review分数
+    score: float | None                              # Review分数
     has_submission: bool                                # 是否有提交
     timestamp: str                                      # Review时间 (ISO格式)
     node_id: str                                        # 关联的Node ID（被review的节点）
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return asdict(self)
 
@@ -34,9 +35,9 @@ class TaskReviewRecord:
     task_score: float                                   # 任务分数 = node_metadata的平均值
     has_submission: bool                                # 是否有提交 = node_metadata中任一为true则为true
     task_id: str                                        # 关联的任务ID（explore/merge任务）
-    node_metadata: List[NodeMetadata] = field(default_factory=list)  # 该任务的所有node的review结果
+    node_metadata: list[NodeMetadata] = field(default_factory=list)  # 该任务的所有node的review结果
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         # 处理NodeMetadata列表
@@ -46,7 +47,7 @@ class TaskReviewRecord:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TaskReviewRecord':
+    def from_dict(cls, data: dict[str, Any]) -> 'TaskReviewRecord':
         """从字典创建实例"""
         # 处理node_metadata字段
         node_metadata_data = data.get('node_metadata', [])
@@ -71,7 +72,7 @@ class PromptVersionRecord:
     used_count: int = 0                                  # 该版本使用次数
 
     # Review记录列表（按explore/merge任务分组）
-    review_records: List[TaskReviewRecord] = field(default_factory=list)  # 该版本的所有review记录
+    review_records: list[TaskReviewRecord] = field(default_factory=list)  # 该版本的所有review记录
 
     # 综合评分
     composite_score: float = 0.0                        # 综合评分 = 加权(平均生成率, 平均准确率)
@@ -79,13 +80,13 @@ class PromptVersionRecord:
     avg_accuracy: float = 0.0                           # 平均准确率
 
     # 反思相关信息
-    reflection: Optional[Dict[str, Any]] = None          # 完整的反思结果（包含diagnosis, suggestions等）
-    previous_version_id: Optional[str] = None            # 前一个版本ID
+    reflection: dict[str, Any] | None = None          # 完整的反思结果（包含diagnosis, suggestions等）
+    previous_version_id: str | None = None            # 前一个版本ID
 
     # 交叉来源信息（用于学习器）
-    crossover_source: Optional[Dict[str, str]] = None    # 交叉来源 {"agent": "agent_1", "version_id": "explore_v2"}
+    crossover_source: dict[str, str] | None = None    # 交叉来源 {"agent": "agent_1", "version_id": "explore_v2"}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         # 处理TaskReviewRecord列表
@@ -95,7 +96,7 @@ class PromptVersionRecord:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PromptVersionRecord':
+    def from_dict(cls, data: dict[str, Any]) -> 'PromptVersionRecord':
         """从字典创建实例"""
         # 处理review_records字段
         review_records_data = data.get('review_records', [])
@@ -115,13 +116,13 @@ class AgentEvolutionRecord:
     last_updated: str                                    # 最后更新时间
 
     # Prompt版本历史
-    prompt_versions: List[PromptVersionRecord] = field(default_factory=list)  # 版本历史列表
+    prompt_versions: list[PromptVersionRecord] = field(default_factory=list)  # 版本历史列表
 
     # 当前状态
-    current_explore_version: Optional[str] = None        # 当前explore版本ID
-    current_merge_version: Optional[str] = None          # 当前merge版本ID
+    current_explore_version: str | None = None        # 当前explore版本ID
+    current_merge_version: str | None = None          # 当前merge版本ID
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         # 处理嵌套的dataclass对象
@@ -129,7 +130,7 @@ class AgentEvolutionRecord:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AgentEvolutionRecord':
+    def from_dict(cls, data: dict[str, Any]) -> 'AgentEvolutionRecord':
         """从字典创建实例"""
         # 处理嵌套的dataclass对象
         prompt_versions = [PromptVersionRecord.from_dict(v) for v in data.get('prompt_versions', [])]
@@ -176,7 +177,7 @@ class AgentVersionManager:
         self.prompt_manager = prompt_manager
 
         # 内存中的Agent记录
-        self.agent_records: Dict[str, AgentEvolutionRecord] = {}
+        self.agent_records: dict[str, AgentEvolutionRecord] = {}
 
         # 加载已存在的记录
         self._load_existing_records()
@@ -186,7 +187,7 @@ class AgentVersionManager:
         try:
             for record_file in self.storage_dir.glob("agent_*.json"):
                 try:
-                    with open(record_file, 'r', encoding='utf-8') as f:
+                    with open(record_file, encoding='utf-8') as f:
                         data = json.load(f)
                     record = AgentEvolutionRecord.from_dict(data)
                     self.agent_records[record.agent_name] = record
@@ -228,8 +229,8 @@ class AgentVersionManager:
         prompt_type: str,
         prompt_content: str,
         source: str = "generated",
-        previous_version_id: Optional[str] = None,
-        crossover_source: Optional[Dict[str, str]] = None
+        previous_version_id: str | None = None,
+        crossover_source: dict[str, str] | None = None
     ) -> PromptVersionRecord:
         """
         记录一个新的prompt版本
@@ -380,9 +381,9 @@ class AgentVersionManager:
         prompt_type: str,
         task_id: str,
         node_id: str,
-        score: Optional[float],
+        score: float | None,
         has_submission: bool,
-        version_id: Optional[str] = None
+        version_id: str | None = None
     ) -> bool:
         """
         记录review结果到对应的prompt版本
@@ -520,7 +521,7 @@ class AgentVersionManager:
         self,
         agent_name: str,
         version_id: str,
-        reflection: Dict[str, Any]
+        reflection: dict[str, Any]
     ) -> bool:
         """
         更新版本的reflection（完整反思结果）
@@ -547,7 +548,7 @@ class AgentVersionManager:
 
             return False
 
-    def get_agent_record(self, agent_name: str) -> Optional[AgentEvolutionRecord]:
+    def get_agent_record(self, agent_name: str) -> AgentEvolutionRecord | None:
         """
         获取Agent的完整进化记录
 
@@ -559,7 +560,7 @@ class AgentVersionManager:
         """
         return self.agent_records.get(agent_name)
 
-    def get_current_prompt(self, agent_name: str, prompt_type: str) -> Optional[PromptVersionRecord]:
+    def get_current_prompt(self, agent_name: str, prompt_type: str) -> PromptVersionRecord | None:
         """
         获取Agent当前的prompt版本
 
@@ -604,7 +605,7 @@ class AgentVersionManager:
 
     # ==================== 私有辅助方法 ====================
 
-    def _get_current_version_id(self, agent_record: AgentEvolutionRecord, prompt_type: str) -> Optional[str]:
+    def _get_current_version_id(self, agent_record: AgentEvolutionRecord, prompt_type: str) -> str | None:
         """
         获取Agent当前版本的ID
 

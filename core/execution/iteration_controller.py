@@ -1,25 +1,24 @@
-import os
-import shutil
-import zipfile
-import asyncio
-import time
 import json
+import os
+import time
 import traceback
-from typing import List, Dict, Any, Optional, Set
+import zipfile
 from dataclasses import dataclass, field
-from core.execution.pipeline import Pipeline
+from typing import Any
+
 from core.agent.agent_pool import AgentPool
 from core.agent.base_agent import BaseReActAgent
-from core.execution.journal import Journal, Node
-from core.execution.task_class import Task
 from core.agent.prompt_manager import PromptContext
-from core.evolution.gene_selector import select_gene_plan
 from core.evolution.gene_registry import GeneRegistry
-from utils.logger_system import log_msg
-from core.optimization.reflector import PromptReflector
+from core.evolution.gene_selector import select_gene_plan
+from core.execution.journal import Journal, Node
+from core.execution.pipeline import Pipeline
+from core.execution.task_class import Task
 from core.optimization.generator import PromptGenerator
-from core.optimization.version_manager import AgentVersionManager
 from core.optimization.prompt_learner import PromptLearner
+from core.optimization.reflector import PromptReflector
+from core.optimization.version_manager import AgentVersionManager
+from utils.logger_system import log_msg
 
 
 @dataclass
@@ -32,12 +31,12 @@ class TaskExecutionResult:
     agent_name: str
     task_type: str
     task_id: str
-    agent_output: Dict[str, Any]
+    agent_output: dict[str, Any]
     raw_session: Any = None
-    error: Optional[str] = None
-    result_nodes: List[Node] = field(default_factory=list)
-    update_data: Dict[str, Any] = field(default_factory=dict)
-    archive_path: Optional[str] = None
+    error: str | None = None
+    result_nodes: list[Node] = field(default_factory=list)
+    update_data: dict[str, Any] = field(default_factory=dict)
+    archive_path: str | None = None
 
 
 class IterationController:
@@ -78,7 +77,7 @@ class IterationController:
         # Gene Selection
         self.use_pheromone_gene_selection = config.use_pheromone_gene_selection
         self.gene_registry = GeneRegistry()
-        self._gene_registry_updated_nodes: Set[str] = set()
+        self._gene_registry_updated_nodes: set[str] = set()
 
         # 从 agent_pool 获取 llm 和 prompt_manager（假设所有 agent 相同）
         first_agent = next(iter(self.agent_pool.agents.values()), None)
@@ -188,36 +187,36 @@ class IterationController:
 
             # 第一阶段：explore/merge 任务执行前检查优化条件
             if task_type in ["explore", "merge"]:
-                log_msg("INFO", f"[DEBUG] 检查优化条件...")
+                log_msg("INFO", "[DEBUG] 检查优化条件...")
                 await self._check_and_run_reflection(agent.name, task_type)
-                log_msg("INFO", f"[DEBUG] 优化条件检查完成")
+                log_msg("INFO", "[DEBUG] 优化条件检查完成")
 
             # 第二阶段：准备执行上下文
-            log_msg("INFO", f"[DEBUG] 准备执行上下文...")
+            log_msg("INFO", "[DEBUG] 准备执行上下文...")
             prepared_data = self._prepare_task_execution(agent, task)
-            log_msg("INFO", f"[DEBUG] 上下文准备完成")
+            log_msg("INFO", "[DEBUG] 上下文准备完成")
 
             # 第三阶段：执行Agent任务
-            log_msg("INFO", f"[DEBUG] 开始执行Agent任务...")
+            log_msg("INFO", "[DEBUG] 开始执行Agent任务...")
             execution_result = await self._execute_agent_task(agent, task, prepared_data)
             log_msg("INFO", f"[DEBUG] Agent任务执行完成: success={execution_result.success}")
 
             # 第四阶段：根据执行结果路由处理
             if execution_result.success:
-                log_msg("INFO", f"[DEBUG] 处理成功任务...")
+                log_msg("INFO", "[DEBUG] 处理成功任务...")
                 await self._handle_successful_task(agent, task, execution_result)
-                log_msg("INFO", f"[DEBUG] 成功任务处理完成")
+                log_msg("INFO", "[DEBUG] 成功任务处理完成")
             else:
-                log_msg("INFO", f"[DEBUG] 处理失败任务...")
+                log_msg("INFO", "[DEBUG] 处理失败任务...")
                 await self._handle_failed_task(agent, task, execution_result)
-                log_msg("INFO", f"[DEBUG] 失败任务处理完成")
+                log_msg("INFO", "[DEBUG] 失败任务处理完成")
 
             # 第五阶段：完成任务（通知Pipeline）
-            log_msg("INFO", f"[DEBUG] 完成Pipeline任务...")
+            log_msg("INFO", "[DEBUG] 完成Pipeline任务...")
             self._complete_task_in_pipeline(task, execution_result)
-            log_msg("INFO", f"[DEBUG] Pipeline任务完成")
+            log_msg("INFO", "[DEBUG] Pipeline任务完成")
 
-            log_msg("INFO", f"[DEBUG] _run_single_task 完全结束")
+            log_msg("INFO", "[DEBUG] _run_single_task 完全结束")
 
         except Exception as e:
             log_msg("ERROR", f"Agent {agent.name} 执行任务 {task_id} 时发生异常: {e}")
@@ -230,7 +229,7 @@ class IterationController:
     # Gene Selection Methods
     # ========================================================================
 
-    def _maybe_compute_gene_plan(self, task: Task) -> Optional[Dict[str, Any]]:
+    def _maybe_compute_gene_plan(self, task: Task) -> dict[str, Any] | None:
         """Gene Selection Logic"""
         if not self.use_pheromone_gene_selection:
             return None
@@ -253,7 +252,7 @@ class IterationController:
             )
             return None
 
-    def _log_gene_plan(self, gene_plan: Dict[str, Any]) -> None:
+    def _log_gene_plan(self, gene_plan: dict[str, Any]) -> None:
         """Log gene plan"""
         parts = []
         labels = [
@@ -265,8 +264,8 @@ class IterationController:
             ("init", "initialization_source"),
             ("tricks", "tricks_source"),
         ]
-        for label, field in labels:
-            spec = gene_plan.get(field)
+        for label, gene_field in labels:
+            spec = gene_plan.get(gene_field)
             if isinstance(spec, dict):
                 node_id = spec.get("source_node_id", "")
                 gene_id = spec.get("gene_id", "")
@@ -293,7 +292,7 @@ class IterationController:
     # Prompt Optimization Methods
     # ========================================================================
 
-    def _prepare_task_execution(self, agent: BaseReActAgent, task: Task) -> Dict[str, Any]:
+    def _prepare_task_execution(self, agent: BaseReActAgent, task: Task) -> dict[str, Any]:
         """
         准备任务执行所需的上下文数据
 
@@ -308,7 +307,7 @@ class IterationController:
         return {"prompt_context": prompt_context, "task_description": task_description}
 
     async def _execute_agent_task(
-        self, agent: BaseReActAgent, task: Task, prepared_data: Dict[str, Any]
+        self, agent: BaseReActAgent, task: Task, prepared_data: dict[str, Any]
     ) -> TaskExecutionResult:
         """
         执行Agent任务
@@ -453,9 +452,9 @@ class IterationController:
         task_type = task["type"]
 
         # 第一步：记录prompt使用次数（无论是否生成节点）
-        log_msg("INFO", f"[DEBUG] 开始记录prompt使用次数...")
+        log_msg("INFO", "[DEBUG] 开始记录prompt使用次数...")
         await self.version_manager.record_prompt_usage(agent.name, task_type)
-        log_msg("INFO", f"[DEBUG] prompt使用次数记录完成")
+        log_msg("INFO", "[DEBUG] prompt使用次数记录完成")
 
         # 第二步：创建节点
         execution_result.result_nodes = self._create_nodes_from_result(execution_result, task, agent.name)
@@ -503,7 +502,7 @@ class IterationController:
     # Prompt Construction Methods
     # ========================================================================
 
-    def _construct_prompt_context(self, task: Task, step_limit: Optional[int] = None) -> PromptContext:
+    def _construct_prompt_context(self, task: Task, step_limit: int | None = None) -> PromptContext:
         """
         构建Prompt上下文
 
@@ -616,7 +615,7 @@ class IterationController:
 
     def _create_nodes_from_result(
         self, execution_result: TaskExecutionResult, task: Task, agent_name: str
-    ) -> List[Node]:
+    ) -> list[Node]:
         """
         从执行结果中创建Journal节点
 
@@ -752,7 +751,7 @@ class IterationController:
 
         return nodes
 
-    def _archive_solution_files(self, task_id: str, workspace_dir: str) -> Optional[str]:
+    def _archive_solution_files(self, task_id: str, workspace_dir: str) -> str | None:
         """
         归档任务执行过程中的 solution.py 和 submission.csv 文件
 

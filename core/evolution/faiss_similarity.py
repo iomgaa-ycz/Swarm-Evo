@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import numpy as np
 import faiss
+import numpy as np
 
 
 def build_ip_index(vectors: np.ndarray) -> faiss.Index:

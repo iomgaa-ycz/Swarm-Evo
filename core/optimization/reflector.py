@@ -7,14 +7,14 @@
 3. 使用LLM分析prompt效果并提供改进建议
 """
 
-from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
-from datetime import datetime
+from typing import Any
+
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage
+
 from core.agent.prompt_manager import PromptManager
+from core.optimization.utils import LLMResponseParser, MessageBuilder
 from core.optimization.version_manager import PromptVersionRecord
-from core.optimization.utils import LLMResponseParser, MessageBuilder, FileSaver
 
 
 @dataclass
@@ -53,8 +53,8 @@ class PromptReflector:
         prompt_content: str,
         metrics: PerformanceMetrics,
         used_count: int,
-        additional_context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        additional_context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         对prompt进行反思，生成改进建议
 
@@ -101,8 +101,8 @@ class PromptReflector:
         prompt_content: str,
         metrics: PerformanceMetrics,
         used_count: int,
-        additional_context: Dict[str, Any]
-    ) -> List:
+        additional_context: dict[str, Any]
+    ) -> list:
         """
         构建用于LLM反思的消息
         """
@@ -126,7 +126,7 @@ class PromptReflector:
             human_message="请基于以上数据分析这个prompt的表现，并提供具体的改进建议。"
         )
 
-    def _parse_reflection_response(self, response_content: str) -> Dict[str, Any]:
+    def _parse_reflection_response(self, response_content: str) -> dict[str, Any]:
         """
         解析LLM的反思响应
         """
@@ -147,8 +147,8 @@ class PromptReflector:
     async def analyze_version(
         self,
         version_record: PromptVersionRecord,
-        additional_context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        additional_context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         分析特定prompt版本的执行效果，生成改进建议（reflection）
 
