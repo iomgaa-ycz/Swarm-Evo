@@ -25,7 +25,13 @@ COPY requirements_agent.txt ${AGENT_DIR}/requirements.txt
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
 # create conda environment and install the requirements to it
-RUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \
+RUN conda run -n ${CONDA_ENV_NAME} conda install -y \
+        -c pytorch \
+        -c conda-forge \
+        faiss-cpu=1.13.2 && \
+    # 2. 再运行 Pip 安装 requirements.txt
+    # 注意：这里 pip 会检测到 conda 已经安装的 numpy，并基于此安装兼容的 sklearn
+    conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \
     conda clean -afy
 
 # put all the agent files in the expected location
