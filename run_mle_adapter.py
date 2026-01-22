@@ -240,7 +240,7 @@ Save your predictions to: {submission_dir / "submission.csv"}
         log_msg("INFO", "竞赛执行完成")
         
     except Exception as e:
-        log_msg("ERROR", f"竞赛执行失败: {e}", exc_info=True)
+        log_msg("ERROR", f"竞赛执行失败: {e}")
     
     # =========================================
     # 第十阶段：输出结果文件（MLE-Bench 合规）
