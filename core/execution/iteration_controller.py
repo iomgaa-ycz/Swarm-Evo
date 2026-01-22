@@ -219,7 +219,7 @@ class IterationController:
     # Gene Selection Methods
     # ========================================================================
 
-    def _maybe_compute_gene_plan(self, task: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _maybe_compute_gene_plan(self, task: Task) -> Optional[Dict[str, Any]]:
         """Gene Selection Logic"""
         if not self.use_pheromone_gene_selection:
             return None
