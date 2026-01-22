@@ -360,6 +360,9 @@ class TerminalTool(BaseTool):
         stderr_chunks = []
         start_time = time.time()
         
+        # 防御性初始化 PGID，防止 UnboundLocalError
+        pgid = None
+        
         try:
             # start_new_session=True 用于创建新的进程组
             # 这允许我们在超时时杀死整个进程组，防止僵尸管道
@@ -448,10 +451,11 @@ class TerminalTool(BaseTool):
             
             # 手动清理：确保所有子进程（僵尸）都被杀掉
             # 无论成功失败，既然主任务结束了，就清理现场
-            try:
-                os.killpg(pgid, signal.SIGKILL)
-            except Exception:
-                pass
+            if pgid is not None:
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                except Exception:
+                    pass
 
             exit_code = return_code if return_code is not None else -1
             stdout = "".join(stdout_chunks)
@@ -459,10 +463,11 @@ class TerminalTool(BaseTool):
 
         except subprocess.TimeoutExpired:
             # 超时处理
-            try:
-                os.killpg(pgid, signal.SIGKILL)
-            except Exception:
-                pass
+            if pgid is not None:
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                except Exception:
+                    pass
             
             return (
                 f"[ERROR] Command timed out after {timeout} seconds.\n"
