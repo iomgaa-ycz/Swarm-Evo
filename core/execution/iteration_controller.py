@@ -27,6 +27,7 @@ class TaskExecutionResult:
     """
     任务执行结果的统一封装
     """
+
     success: bool
     agent_name: str
     task_type: str
@@ -47,12 +48,12 @@ class IterationController:
     """
 
     # 类常量
-    SCORE_THRESHOLD = 0.65               # 学习/反思阈值
-    REFLECTION_TRIGGER_THRESHOLD = 5     # 反思触发使用次数阈值
+    SCORE_THRESHOLD = 0.65  # 学习/反思阈值
+    REFLECTION_TRIGGER_THRESHOLD = 5  # 反思触发使用次数阈值
     TEMPLATE_MAP = {
-        'review': 'evaluate_user_prompt.j2',
-        'merge': 'merge_user_prompt.j2',
-        'explore': 'explore_user_prompt.j2'
+        "review": "evaluate_user_prompt.j2",
+        "merge": "merge_user_prompt.j2",
+        "explore": "explore_user_prompt.j2",
     }
 
     def __init__(
@@ -62,8 +63,7 @@ class IterationController:
         journal: Journal,
         config: Any,
         competition_description: str = "",
-        conda_packages: str = ""
-
+        conda_packages: str = "",
     ):
         self.agent_pool = agent_pool
         self.task_pipeline = task_pipeline
@@ -74,7 +74,7 @@ class IterationController:
 
         self.current_epoch = 0
         self.start_time = time.time()
-        
+
         # Gene Selection
         self.use_pheromone_gene_selection = config.use_pheromone_gene_selection
         self.gene_registry = GeneRegistry()
@@ -88,25 +88,33 @@ class IterationController:
         # 初始化版本管理器（传入 prompt_manager 以获取初始模板）
         self.version_manager = AgentVersionManager(
             storage_dir=os.path.join(self.config.mle_bench_workspace_dir, "agent_evolution"),
-            prompt_manager=self.prompt_manager
+            prompt_manager=self.prompt_manager,
         )
 
         # 初始化反思器和生成器
-        self.reflector = PromptReflector(llm=self.llm, prompt_manager=self.prompt_manager) if self.llm and self.prompt_manager else None
-        self.generator = PromptGenerator(
-            llm=self.llm,
-            prompt_manager=self.prompt_manager,
-            version_manager=self.version_manager
-        ) if self.llm and self.prompt_manager else None
+        self.reflector = (
+            PromptReflector(llm=self.llm, prompt_manager=self.prompt_manager)
+            if self.llm and self.prompt_manager
+            else None
+        )
+        self.generator = (
+            PromptGenerator(llm=self.llm, prompt_manager=self.prompt_manager, version_manager=self.version_manager)
+            if self.llm and self.prompt_manager
+            else None
+        )
 
         # 初始化学习器
-        self.learner = PromptLearner(
-            version_manager=self.version_manager,
-            llm=self.llm,
-            prompt_manager=self.prompt_manager,
-            learning_threshold=getattr(self.config, 'learning_threshold', 0.1),
-            storage_dir=os.path.join(self.config.mle_bench_workspace_dir, "prompt_learning")
-        ) if self.llm and self.prompt_manager else None
+        self.learner = (
+            PromptLearner(
+                version_manager=self.version_manager,
+                llm=self.llm,
+                prompt_manager=self.prompt_manager,
+                learning_threshold=getattr(self.config, "learning_threshold", 0.1),
+                storage_dir=os.path.join(self.config.mle_bench_workspace_dir, "prompt_learning"),
+            )
+            if self.llm and self.prompt_manager
+            else None
+        )
 
     async def run_competition(self):
         """主竞争循环"""
@@ -114,7 +122,10 @@ class IterationController:
         while self.current_epoch < self.config.mle_bench_epoch_limit:
             elapsed_time = time.time() - self.start_time
             if elapsed_time > self.config.time_limit_seconds:
-                log_msg("WARNING", f"已达到时间限制 ({self.config.time_limit_seconds}秒), 停止竞赛循环。当前耗时: {elapsed_time:.2f}秒")
+                log_msg(
+                    "WARNING",
+                    f"已达到时间限制 ({self.config.time_limit_seconds}秒), 停止竞赛循环。当前耗时: {elapsed_time:.2f}秒",
+                )
                 break
 
             self.current_epoch += 1
@@ -134,13 +145,13 @@ class IterationController:
         log_msg("INFO", f"Epoch {self.current_epoch}: {len(agents)} 个 Agent 轮询执行")
 
         for idx, agent in enumerate(agents):
-            log_msg("INFO", f"Epoch {self.current_epoch}: 准备获取任务 {idx+1}/{len(agents)}")
+            log_msg("INFO", f"Epoch {self.current_epoch}: 准备获取任务 {idx + 1}/{len(agents)}")
             task_item = self.task_pipeline.get_task()
             if not task_item:
                 log_msg("INFO", f"Epoch {self.current_epoch}: Pipeline 无更多任务，跳过 {agent.name}")
                 continue
 
-            task_item['agent_name'] = agent.name
+            task_item["agent_name"] = agent.name
             log_msg("INFO", f"Epoch {self.current_epoch}: {agent.name} ← {task_item['type']} 任务")
 
             # 串行执行（避免 workspace 冲突）
@@ -162,21 +173,21 @@ class IterationController:
         4. 处理阶段 - 根据成功/失败路由到不同的处理器
         5. 完成阶段 - 通知Pipeline并触发后续任务
         """
-        task_id = task['id']
-        task_type = task['type']
+        task_id = task["id"]
+        task_type = task["type"]
         log_msg("INFO", f"[DEBUG] _run_single_task 开始: {agent.name}, {task_type}, {task_id}")
 
         try:
             # 第零阶段：MERGE任务计算gene_plan
-            if task_type == 'merge':
-                payload = task['payload']
+            if task_type == "merge":
+                payload = task["payload"]
                 gene_plan = self._maybe_compute_gene_plan(task)
-                payload['gene_plan'] = gene_plan
+                payload["gene_plan"] = gene_plan
                 if gene_plan is None:
                     log_msg("WARNING", f"[MERGE] Task {task_id} running without gene_plan (fallback merge)")
 
             # 第一阶段：explore/merge 任务执行前检查优化条件
-            if task_type in ['explore', 'merge']:
+            if task_type in ["explore", "merge"]:
                 log_msg("INFO", f"[DEBUG] 检查优化条件...")
                 await self._check_and_run_reflection(agent.name, task_type)
                 log_msg("INFO", f"[DEBUG] 优化条件检查完成")
@@ -238,10 +249,7 @@ class IterationController:
 
         except Exception as exc:
             log_msg(
-                "WARNING",
-                "Pheromone gene selection failed.\n"
-                f"Exception: {exc}\n"
-                f"Traceback:\n{traceback.format_exc()}"
+                "WARNING", f"Pheromone gene selection failed.\nException: {exc}\nTraceback:\n{traceback.format_exc()}"
             )
             return None
 
@@ -297,16 +305,10 @@ class IterationController:
         prompt_context = self._construct_prompt_context(task)
         task_description = self._get_task_description(task)
 
-        return {
-            "prompt_context": prompt_context,
-            "task_description": task_description
-        }
+        return {"prompt_context": prompt_context, "task_description": task_description}
 
     async def _execute_agent_task(
-        self,
-        agent: BaseReActAgent,
-        task: Task,
-        prepared_data: Dict[str, Any]
+        self, agent: BaseReActAgent, task: Task, prepared_data: Dict[str, Any]
     ) -> TaskExecutionResult:
         """
         执行Agent任务
@@ -314,81 +316,66 @@ class IterationController:
         Returns:
             TaskExecutionResult: 包含执行结果的封装对象
         """
-        task_id = task['id']
-        task_type = task['type']
+        task_id = task["id"]
+        task_type = task["type"]
 
         # 统一确定步数限制
         current_max_steps = agent.max_steps
-        if task_type == 'review':
+        if task_type == "review":
             current_max_steps = 1
 
         agent_input_state = {
-            "task_description": prepared_data['task_description'],
-            "prompt_context": prepared_data['prompt_context'],
-            "max_steps": current_max_steps
+            "task_description": prepared_data["task_description"],
+            "prompt_context": prepared_data["prompt_context"],
+            "max_steps": current_max_steps,
         }
 
         result = await agent(agent_input_state)
 
         return TaskExecutionResult(
-            success=result.get('agent_success', False),
+            success=result.get("agent_success", False),
             agent_name=agent.name,
             task_type=task_type,
             task_id=task_id,
-            agent_output=result.get('agent_output', {}),
-            raw_session=result.get('raw_session'),
-            error=result.get('error')
+            agent_output=result.get("agent_output", {}),
+            raw_session=result.get("raw_session"),
+            error=result.get("error"),
         )
 
-    async def _handle_successful_task(
-        self,
-        agent: BaseReActAgent,
-        task: Task,
-        execution_result: TaskExecutionResult
-    ):
+    async def _handle_successful_task(self, agent: BaseReActAgent, task: Task, execution_result: TaskExecutionResult):
         """
         处理成功任务的路由器
 
         根据任务类型分发到具体的处理器
         """
-        task_type = task['type']
+        task_type = task["type"]
 
         # 路由到具体的任务处理器
-        if task_type == 'review':
+        if task_type == "review":
             await self._process_review_task(agent, task, execution_result)
-        elif task_type in ['explore', 'merge']:
+        elif task_type in ["explore", "merge"]:
             await self._process_explore_merge_task(agent, task, execution_result)
         else:
             log_msg("WARNING", f"未知的任务类型: {task_type}")
 
-    async def _handle_failed_task(
-        self,
-        agent: BaseReActAgent,
-        task: Task,
-        execution_result: TaskExecutionResult
-    ):
+    async def _handle_failed_task(self, agent: BaseReActAgent, task: Task, execution_result: TaskExecutionResult):
         """
         处理失败任务
 
         失败任务仍然记录prompt使用次数，但不创建节点、不归档文件
         """
-        task_id = task['id']
-        task_type = task['type']
+        task_id = task["id"]
+        task_type = task["type"]
 
         log_msg("WARNING", f"任务失败: {task_type} (ID: {task_id}) by {agent.name}")
 
         # explore/merge任务即使失败也要记录使用次数
-        if task_type in ['explore', 'merge']:
+        if task_type in ["explore", "merge"]:
             await self.version_manager.record_prompt_usage(agent.name, task_type)
 
         # 不创建节点、不归档文件
 
-    async def _process_review_task(
-        self,
-        agent: BaseReActAgent,
-        task: Task,
-        execution_result: TaskExecutionResult
-    ):
+    async def _process_review_task(self, agent: BaseReActAgent, task: Task, execution_result: TaskExecutionResult):
         """
         处理Review任务的成功结果
 
@@ -397,8 +384,8 @@ class IterationController:
         2. 记录到版本管理器（用于优化）
         3. 准备update_data供Pipeline更新节点
         """
-        task_id = task['id']
-        target_id = task['payload'].get('target_node_id')
+        task_id = task["id"]
+        target_id = task["payload"].get("target_node_id")
         agent_output = execution_result.agent_output
 
         if not target_id:
@@ -410,39 +397,49 @@ class IterationController:
             log_msg("WARNING", f"Review任务 {task_id} 的目标节点 {target_id} 不存在")
             return
 
+        # Ensure score is a float to avoid type comparison errors in Pipeline (Issue 2.2 Fix)
+        raw_score = agent_output.get("score")
+        safe_score = None
+        try:
+            if raw_score is not None:
+                safe_score = float(raw_score)
+        except (ValueError, TypeError):
+            log_msg("WARNING", f"Agent {agent.name} returned invalid score: {raw_score}, treating as None")
+            safe_score = None
+
         # 准备更新数据
         execution_result.update_data = {
-            "score": agent_output.get('score'),
-            "summary": agent_output.get('summary', ""),
-            "is_bug": agent_output.get('is_bug', False),
-            "agent_success": execution_result.success
+            "score": safe_score,
+            "summary": agent_output.get("summary", ""),
+            "is_bug": agent_output.get("is_bug", False),
+            "agent_success": execution_result.success,
         }
 
         # 记录review结果到版本管理器（核心优化需求）
         reviewed_prompt_type = target_node.action_type  # 'explore' 或 'merge'
-        original_agent_name = target_node.metadata.get('agent_name', agent.name)
-        prompt_version_id = target_node.metadata.get('prompt_version_id')  # 获取原始prompt版本ID
-        original_task_id = target_node.metadata.get('task_id')  # 获取原始explore/merge任务ID
+        original_agent_name = target_node.metadata.get("agent_name", agent.name)
+        prompt_version_id = target_node.metadata.get("prompt_version_id")  # 获取原始prompt版本ID
+        original_task_id = target_node.metadata.get("task_id")  # 获取原始explore/merge任务ID
 
         await self.version_manager.record_review_result(
             agent_name=original_agent_name,
             prompt_type=reviewed_prompt_type,
             task_id=original_task_id,
             node_id=target_id,  # 被review的Node ID
-            score=agent_output.get('score'),
-            has_submission=agent_output.get('has_csv_submission', False),
-            version_id=prompt_version_id  # 传递原始版本ID
+            score=agent_output.get("score"),
+            has_submission=agent_output.get("has_csv_submission", False),
+            version_id=prompt_version_id,  # 传递原始版本ID
         )
 
-        log_msg("INFO", f"已记录review结果: {original_agent_name} - {reviewed_prompt_type} - "
-                      f"task_id={original_task_id} - node_id={target_id} - "
-                      f"version_id={prompt_version_id} - score={agent_output.get('score')}")
+        log_msg(
+            "INFO",
+            f"已记录review结果: {original_agent_name} - {reviewed_prompt_type} - "
+            f"task_id={original_task_id} - node_id={target_id} - "
+            f"version_id={prompt_version_id} - score={agent_output.get('score')}",
+        )
 
     async def _process_explore_merge_task(
-        self,
-        agent: BaseReActAgent,
-        task: Task,
-        execution_result: TaskExecutionResult
+        self, agent: BaseReActAgent, task: Task, execution_result: TaskExecutionResult
     ):
         """
         处理Explore/Merge任务的成功结果
@@ -452,8 +449,8 @@ class IterationController:
         2. 从执行结果中创建Node
         3. 归档solution文件
         """
-        task_id = task['id']
-        task_type = task['type']
+        task_id = task["id"]
+        task_type = task["type"]
 
         # 第一步：记录prompt使用次数（无论是否生成节点）
         log_msg("INFO", f"[DEBUG] 开始记录prompt使用次数...")
@@ -461,17 +458,13 @@ class IterationController:
         log_msg("INFO", f"[DEBUG] prompt使用次数记录完成")
 
         # 第二步：创建节点
-        execution_result.result_nodes = self._create_nodes_from_result(
-            execution_result, task, agent.name
-        )
+        execution_result.result_nodes = self._create_nodes_from_result(execution_result, task, agent.name)
 
         if not execution_result.result_nodes:
             log_msg("WARNING", f"{task_type}任务 {task_id} 未生成任何节点，但已记录使用次数")
             # 创建空的TaskReviewRecord
             await self.version_manager.record_task_execution(
-                agent_name=agent.name,
-                prompt_type=task_type,
-                task_id=task_id
+                agent_name=agent.name, prompt_type=task_type, task_id=task_id
             )
             return
 
@@ -482,7 +475,9 @@ class IterationController:
             for node in execution_result.result_nodes:
                 node.archive_path = archive_path
 
-        log_msg("INFO", f"{agent.name} 完成 {task_type} 任务 {task_id}，生成 {len(execution_result.result_nodes)} 个节点")
+        log_msg(
+            "INFO", f"{agent.name} 完成 {task_type} 任务 {task_id}，生成 {len(execution_result.result_nodes)} 个节点"
+        )
 
     def _complete_task_in_pipeline(self, task: Task, execution_result: TaskExecutionResult):
         """
@@ -493,13 +488,13 @@ class IterationController:
         2. 添加节点到Journal
         3. 创建后续任务（如review）
         """
-        task_id = task['id']
+        task_id = task["id"]
         log_msg("INFO", f"[DEBUG] _complete_task_in_pipeline 开始: {task_id}")
 
         self.task_pipeline.complete_task(
             task_id=task_id,
             result_nodes=execution_result.result_nodes,
-            update_data=execution_result.update_data if execution_result.update_data else None
+            update_data=execution_result.update_data if execution_result.update_data else None,
         )
 
         log_msg("INFO", f"[DEBUG] _complete_task_in_pipeline 完成: {task_id}")
@@ -518,26 +513,26 @@ class IterationController:
             task: 任务字典
             step_limit: 步数限制（已根据任务类型确定）
         """
-        payload = task.get('payload', {})
+        payload = task.get("payload", {})
 
         elapsed = time.time() - self.start_time
         remaining = self.config.time_limit_seconds - elapsed
 
         # 设置默认模板名称
-        if payload.get('template_name') is None:
-            payload['template_name'] = self.TEMPLATE_MAP.get(task['type'], 'explore_user_prompt.j2')
+        if payload.get("template_name") is None:
+            payload["template_name"] = self.TEMPLATE_MAP.get(task["type"], "explore_user_prompt.j2")
 
             # Explore任务继承处理
-            if task['type'] == 'explore':
-                parent_id = payload.get('parent_id')
+            if task["type"] == "explore":
+                parent_id = payload.get("parent_id")
                 if parent_id:
                     parent_node = self.journal.get_node(parent_id)
                     if parent_node:
-                        payload['parent_code'] = parent_node.code
-                        payload['parent_feedback'] = parent_node.summary
+                        payload["parent_code"] = parent_node.code
+                        payload["parent_feedback"] = parent_node.summary
                         # logs 对应模板中的 parent_history
-                        payload['parent_history'] = parent_node.logs
-                        payload['parent_score'] = parent_node.score
+                        payload["parent_history"] = parent_node.logs
+                        payload["parent_score"] = parent_node.score
 
         # 动态填充数据
         candidates_data = {}
@@ -545,16 +540,16 @@ class IterationController:
         solution_code = None
         execution_logs = None
 
-        if task['type'] == 'merge':
+        if task["type"] == "merge":
             # Merge 任务逻辑更新
-            gene_plan_data = payload.get('gene_plan')
+            gene_plan_data = payload.get("gene_plan")
             # 仍然需要 candidate code 用于 materialization
-            candidate_ids = payload.get('candidate_ids', [])
+            candidate_ids = payload.get("candidate_ids", [])
             # 如果 gene_plan 存在，sources 也应该作为 candidates
             if gene_plan_data:
                 for spec in gene_plan_data.values():
                     if isinstance(spec, dict) and spec.get("source_node_id"):
-                         candidate_ids.append(spec.get("source_node_id"))
+                        candidate_ids.append(spec.get("source_node_id"))
 
             candidate_ids = list(set(candidate_ids))
             for cid in candidate_ids:
@@ -562,9 +557,9 @@ class IterationController:
                 if node and node.code:
                     candidates_data[cid] = node.code
 
-        elif task['type'] == 'review':
+        elif task["type"] == "review":
             # 获取被review节点的代码和日志
-            target_id = payload.get('target_node_id')
+            target_id = payload.get("target_node_id")
             if target_id:
                 node = self.journal.get_node(target_id)
                 if node:
@@ -586,15 +581,15 @@ class IterationController:
             conda_packages=self.conda_packages,
             task_description=self._get_task_description(task),
             step_limit=step_limit,
-            parent_code=payload.get('parent_code'),
-            parent_feedback=payload.get('parent_feedback'),
-            parent_score=payload.get('parent_score'),
-            candidates=candidates_data if candidates_data else payload.get('candidates'),
-            gene_plan=gene_plan_data if gene_plan_data else payload.get('gene_plan'),
-            solution_code=solution_code if solution_code else payload.get('solution_code'),
-            execution_logs=execution_logs if execution_logs else payload.get('execution_logs'),
-            parent_history=payload.get('parent_history'),
-            template_name=payload.get('template_name')
+            parent_code=payload.get("parent_code"),
+            parent_feedback=payload.get("parent_feedback"),
+            parent_score=payload.get("parent_score"),
+            candidates=candidates_data if candidates_data else payload.get("candidates"),
+            gene_plan=gene_plan_data if gene_plan_data else payload.get("gene_plan"),
+            solution_code=solution_code if solution_code else payload.get("solution_code"),
+            execution_logs=execution_logs if execution_logs else payload.get("execution_logs"),
+            parent_history=payload.get("parent_history"),
+            template_name=payload.get("template_name"),
         )
 
     def _get_task_description(self, task: Task) -> str:
@@ -603,12 +598,12 @@ class IterationController:
 
         基于任务类型生成人类可读的任务描述，并添加竞赛背景
         """
-        t_type = task['type']
+        t_type = task["type"]
 
         task_instructions = {
-            'explore': "Please explore a new solution based on the plan.",
-            'merge': "Please merge the selected strategies into a new solution.",
-            'review': "Please review the solution and provide feedback."
+            "explore": "Please explore a new solution based on the plan.",
+            "merge": "Please merge the selected strategies into a new solution.",
+            "review": "Please review the solution and provide feedback.",
         }
 
         task_instruction = task_instructions.get(t_type, f"Execute task of type {t_type}")
@@ -619,7 +614,9 @@ class IterationController:
 
         return task_instruction
 
-    def _create_nodes_from_result(self, execution_result: TaskExecutionResult, task: Task, agent_name: str) -> List[Node]:
+    def _create_nodes_from_result(
+        self, execution_result: TaskExecutionResult, task: Task, agent_name: str
+    ) -> List[Node]:
         """
         从执行结果中创建Journal节点
 
@@ -637,45 +634,45 @@ class IterationController:
         """
         nodes = []
         raw_session = execution_result.raw_session
-        task_type = task['type']
+        task_type = task["type"]
 
         # 处理父节点ID
         parent_ids = []
-        if task['type'] == 'merge':
+        if task["type"] == "merge":
             # Merge node parents = Gene Sources
-            gene_plan = task['payload'].get('gene_plan') or {}
+            gene_plan = task["payload"].get("gene_plan") or {}
             gene_source_ids = [
                 spec.get("source_node_id")
                 for spec in gene_plan.values()
                 if isinstance(spec, dict) and spec.get("source_node_id")
             ]
             # Combine candidate_ids and gene_source_ids
-            candidate_ids = task['payload'].get('candidate_ids', [])
+            candidate_ids = task["payload"].get("candidate_ids", [])
             parent_ids = list(set(candidate_ids + gene_source_ids))
         else:
-            parent_id = task.get('payload', {}).get('parent_id')
+            parent_id = task.get("payload", {}).get("parent_id")
             if parent_id:
                 parent_ids = [parent_id]
 
         # 提取完整日志
         logs = ""
         if raw_session:
-            logs = json.dumps([h.get('observation') for h in raw_session.history], ensure_ascii=False)
+            logs = json.dumps([h.get("observation") for h in raw_session.history], ensure_ascii=False)
 
         # 策略1: 从history中提取solution.py的多个版本
-        if task['type'] in ['explore', 'merge'] and raw_session:
+        if task["type"] in ["explore", "merge"] and raw_session:
             history = raw_session.history
             seen_content = set()
 
             for i, step in enumerate(history):
-                action = step.get('action') or step.get('tool')
-                tool_input = step.get('input') or step.get('tool_input', {})
+                action = step.get("action") or step.get("tool")
+                tool_input = step.get("input") or step.get("tool_input", {})
 
-                if action == 'write_file' and isinstance(tool_input, dict):
-                    path = tool_input.get('path', '')
-                    content = tool_input.get('content', '')
+                if action == "write_file" and isinstance(tool_input, dict):
+                    path = tool_input.get("path", "")
+                    content = tool_input.get("content", "")
 
-                    if path.endswith('solution.py') and content and content not in seen_content:
+                    if path.endswith("solution.py") and content and content not in seen_content:
                         seen_content.add(content)
 
                         # 获取当前prompt版本ID（用于review时匹配正确的版本）
@@ -686,16 +683,23 @@ class IterationController:
                         execution_log = ""
                         for j in range(i + 1, len(history)):
                             next_step = history[j]
-                            next_action = next_step.get('action') or next_step.get('tool')
-                            next_input = next_step.get('input') or next_step.get('tool_input', {})
+                            next_action = next_step.get("action") or next_step.get("tool")
+                            next_input = next_step.get("input") or next_step.get("tool_input", {})
 
-                            if next_action in ['run_python', 'python', 'bash', 'cmd_line', 'execute_script', 'terminal']:
-                                execution_log = next_step.get('observation', "")
+                            if next_action in [
+                                "run_python",
+                                "python",
+                                "bash",
+                                "cmd_line",
+                                "execute_script",
+                                "terminal",
+                            ]:
+                                execution_log = next_step.get("observation", "")
                                 break
 
-                            if next_action == 'write_file' and isinstance(next_input, dict):
-                                next_path = next_input.get('path', '')
-                                if next_path.endswith('solution.py'):
+                            if next_action == "write_file" and isinstance(next_input, dict):
+                                next_path = next_input.get("path", "")
+                                if next_path.endswith("solution.py"):
                                     break
 
                         # 创建节点
@@ -704,15 +708,15 @@ class IterationController:
                             code=content,
                             score=None,
                             step=self.current_epoch,
-                            action_type=task['type'],
+                            action_type=task["type"],
                             logs=execution_log if execution_log else logs,
                             metadata={
                                 "agent_name": execution_result.agent_name,
-                                "task_id": task['id'],
+                                "task_id": task["id"],
                                 "success": execution_result.success,
                                 "version": "history_snapshot",
-                                "prompt_version_id": current_version_id  # 保存当前prompt版本ID
-                            }
+                                "prompt_version_id": current_version_id,  # 保存当前prompt版本ID
+                            },
                         )
                         nodes.append(node)
 
@@ -722,7 +726,7 @@ class IterationController:
             code_content = ""
 
             if isinstance(agent_output, dict):
-                code_content = agent_output.get('code', "")
+                code_content = agent_output.get("code", "")
 
             if code_content:
                 # 获取当前prompt版本ID
@@ -732,27 +736,23 @@ class IterationController:
                 node = Node(
                     parent_ids=parent_ids,
                     code=code_content,
-                    score=None if not isinstance(agent_output, dict) else agent_output.get('score'),
+                    score=None if not isinstance(agent_output, dict) else agent_output.get("score"),
                     step=self.current_epoch,
-                    action_type=task['type'],
+                    action_type=task["type"],
                     logs=logs,
                     metadata={
                         "agent_name": execution_result.agent_name,
-                        "task_id": task['id'],
+                        "task_id": task["id"],
                         "success": execution_result.success,
                         "version": "final_output",
-                        "prompt_version_id": current_version_id  # 保存当前prompt版本ID
-                    }
+                        "prompt_version_id": current_version_id,  # 保存当前prompt版本ID
+                    },
                 )
                 nodes.append(node)
 
         return nodes
 
-    def _archive_solution_files(
-        self,
-        task_id: str,
-        workspace_dir: str
-    ) -> Optional[str]:
+    def _archive_solution_files(self, task_id: str, workspace_dir: str) -> Optional[str]:
         """
         归档任务执行过程中的 solution.py 和 submission.csv 文件
 
@@ -782,7 +782,7 @@ class IterationController:
             archive_filename = f"{task_id}.zip"
             archive_path = os.path.join(archive_dir, archive_filename)
 
-            with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 if solution_exists:
                     zipf.write(solution_path, "solution.py")
                     log_msg("INFO", f"已归档 solution.py 到 {archive_path}")
@@ -798,11 +798,7 @@ class IterationController:
             log_msg("ERROR", traceback.format_exc())
             return None
 
-    async def _check_and_run_reflection(
-        self,
-        agent_name: str,
-        task_type: str
-    ):
+    async def _check_and_run_reflection(self, agent_name: str, task_type: str):
         """
         检查并执行学习或反思-生成流程
 
@@ -831,7 +827,9 @@ class IterationController:
             return
 
         composite_score = current_version.composite_score
-        log_msg("INFO", f"{agent_name} 的 {task_type} prompt综合评分: {composite_score:.3f} (阈值: {self.SCORE_THRESHOLD})")
+        log_msg(
+            "INFO", f"{agent_name} 的 {task_type} prompt综合评分: {composite_score:.3f} (阈值: {self.SCORE_THRESHOLD})"
+        )
 
         # 根据评分决定学习还是反思
         if composite_score < self.SCORE_THRESHOLD:
@@ -843,11 +841,7 @@ class IterationController:
             log_msg("INFO", f"评分高于阈值，触发反思流程: {agent_name} 进行自我反思和改进")
             await self._run_reflection_generation(agent_name, task_type)
 
-    async def _run_learning_for_agent(
-        self,
-        agent_name: str,
-        task_type: str
-    ):
+    async def _run_learning_for_agent(self, agent_name: str, task_type: str):
         """
         为特定agent执行学习流程
         当agent的综合评分低于阈值时，向分数最高的agent学习prompt
@@ -862,31 +856,28 @@ class IterationController:
 
         try:
             # 分析学习机会
-            candidates = self.learner.analyze_learning_opportunities(
-                prompt_type=task_type,
-                min_agents=2
-            )
+            candidates = self.learner.analyze_learning_opportunities(prompt_type=task_type, min_agents=2)
 
             # 筛选出以当前agent为学生的候选对
-            student_candidates = [
-                c for c in candidates
-                if c.student_agent == agent_name
-            ]
+            student_candidates = [c for c in candidates if c.student_agent == agent_name]
 
             if not student_candidates:
                 log_msg("INFO", f"未找到适合 {agent_name} 的学习机会（可能已经是最高分）")
                 return
 
             # 选择最佳候选（分数差距最大的）
-            best_candidate = student_candidates[0] 
+            best_candidate = student_candidates[0]
 
             if not best_candidate:
                 log_msg("WARNING", f"无法为 {agent_name} 选择学习候选")
                 return
 
-            log_msg("INFO", f"开始学习: {agent_name} (分数={best_candidate.student_score:.3f}) -> "
-                          f"{best_candidate.teacher_agent} (分数={best_candidate.teacher_score:.3f}), "
-                          f"差距={best_candidate.score_gap:.3f}")
+            log_msg(
+                "INFO",
+                f"开始学习: {agent_name} (分数={best_candidate.student_score:.3f}) -> "
+                f"{best_candidate.teacher_agent} (分数={best_candidate.teacher_score:.3f}), "
+                f"差距={best_candidate.score_gap:.3f}",
+            )
 
             # 执行学习
             learning_result = await self.learner.execute_learning(candidate=best_candidate)
@@ -900,11 +891,7 @@ class IterationController:
             log_msg("ERROR", f"学习流程执行失败: {e}")
             log_msg("ERROR", traceback.format_exc())
 
-    async def _run_reflection_generation(
-        self,
-        agent_name: str,
-        task_type: str
-    ):
+    async def _run_reflection_generation(self, agent_name: str, task_type: str):
         """
         为特定agent执行反思-生成流程
         当agent的综合评分高于阈值时，进行自我反思和改进
@@ -922,19 +909,20 @@ class IterationController:
                 return
 
             # 第二阶段: 使用反思器分析版本
-            reflection_result = await self.reflector.analyze_version(
-                version_record=current_version
-            )
+            reflection_result = await self.reflector.analyze_version(version_record=current_version)
 
-            log_msg("INFO", f"反思分析完成: {task_type} - 准确率={reflection_result['metrics']['avg_accuracy']:.2f}, "
-                          f"生成率={reflection_result['metrics']['avg_generation_rate']:.2f}, "
-                          f"综合评分={reflection_result['metrics']['composite_score']:.3f}")
+            log_msg(
+                "INFO",
+                f"反思分析完成: {task_type} - 准确率={reflection_result['metrics']['avg_accuracy']:.2f}, "
+                f"生成率={reflection_result['metrics']['avg_generation_rate']:.2f}, "
+                f"综合评分={reflection_result['metrics']['composite_score']:.3f}",
+            )
 
             # 第三阶段: 更新当前版本的reflection
             await self.version_manager.update_version_reflection(
                 agent_name=agent_name,
                 version_id=current_version.version_id,
-                reflection=reflection_result.get('reflection', {})
+                reflection=reflection_result.get("reflection", {}),
             )
             log_msg("INFO", f"已更新版本reflection: {current_version.version_id}")
 
@@ -944,21 +932,22 @@ class IterationController:
                 agent_name=agent_name,
                 prompt_type=task_type,
                 current_prompt=current_prompt,
-                reflection=reflection_result.get('reflection', {})
+                reflection=reflection_result.get("reflection", {}),
             )
 
             if not generation_result.success:
                 log_msg("ERROR", f"生成新prompt失败: {generation_result.error}")
                 return
 
-            log_msg("INFO", f"新prompt生成成功: {task_type} - 版本={generation_result.version}, "
-                          f"修改项={len(generation_result.changes_made)}")
+            log_msg(
+                "INFO",
+                f"新prompt生成成功: {task_type} - 版本={generation_result.version}, "
+                f"修改项={len(generation_result.changes_made)}",
+            )
 
             # 第五阶段: 应用新prompt
             applied = await self.generator.apply_new_prompt(
-                prompt_type=task_type,
-                new_prompt=generation_result.new_prompt,
-                version=generation_result.version
+                prompt_type=task_type, new_prompt=generation_result.new_prompt, version=generation_result.version
             )
 
             if applied:
@@ -971,7 +960,7 @@ class IterationController:
                     prompt_type=task_type,
                     prompt_content=generation_result.new_prompt,
                     source="generated",
-                    previous_version_id=current_version.version_id
+                    previous_version_id=current_version.version_id,
                 )
             else:
                 log_msg("ERROR", f"应用新prompt失败: {task_type}")
