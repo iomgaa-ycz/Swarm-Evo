@@ -33,9 +33,9 @@ class Config:
         conda_env = config.conda_env_name
     """
 
-    _instance: Optional['Config'] = None
+    _instance: Optional["Config"] = None
 
-    def __new__(cls) -> 'Config':
+    def __new__(cls) -> "Config":
         """
         单例模式实现
 
@@ -64,48 +64,50 @@ class Config:
             return
 
         # 加载.env文件
-        env_path = Path(__file__).parent.parent / '.env'
+        env_path = Path(__file__).parent.parent / ".env"
         if env_path.exists():
             load_dotenv(env_path, override=True)
 
         # 第一阶段：LLM API配置
-        self.api_key = self._get_required_env('API_KEY')
-        self.api_base = self._get_required_env('API_BASE')
-        self.model_name = self._get_required_env('MODEL_NAME')
+        self.api_key = self._get_required_env("API_KEY")
+        self.api_base = self._get_required_env("API_BASE")
+        self.model_name = self._get_required_env("MODEL_NAME")
 
         # 第二阶段：日志配置
-        self.log_level = self._get_required_env('LOG_LEVEL')
-        self.log_dir = self._get_required_env('LOG_DIR')
+        self.log_level = self._get_required_env("LOG_LEVEL")
+        self.log_dir = self._get_required_env("LOG_DIR")
 
         # 第三阶段：实验配置
-        self.random_seed = self._get_required_int_env('RANDOM_SEED')
-        self.max_concurrent_agents = self._get_optional_int_env('MAX_CONCURRENT_AGENTS', 1)
-        self.agent_timeout = self._get_required_int_env('AGENT_TIMEOUT')
-        self.max_retries = self._get_required_int_env('MAX_RETRIES')
-        self.agent_num = self._get_required_int_env('AGENT_NUM')
-        self.agent_config_dir = self._get_required_env('AGENT_CONFIG_DIR')
+        self.random_seed = self._get_required_int_env("RANDOM_SEED")
+        self.max_concurrent_agents = self._get_optional_int_env("MAX_CONCURRENT_AGENTS", 1)
+        self.agent_timeout = self._get_required_int_env("AGENT_TIMEOUT")
+        self.max_retries = self._get_required_int_env("MAX_RETRIES")
+        self.agent_num = self._get_required_int_env("AGENT_NUM")
+        self.agent_config_dir = self._get_required_env("AGENT_CONFIG_DIR")
 
         # 第四阶段：MLE-bench配置
-        self.mle_bench_competition = self._get_required_env('MLE_BENCH_COMPETITION')
-        self.mle_bench_server_url = self._get_required_env('MLE_BENCH_SERVER_URL')
-        self.mle_bench_workspace_dir = self._get_required_env('MLE_BENCH_WORKSPACE_DIR')
-        self.mle_bench_time_limit = self._get_required_int_env('MLE_BENCH_TIME_LIMIT')
-        self.time_limit_seconds = self.mle_bench_time_limit*3600
-        self.mle_bench_epoch_limit = self._get_required_int_env('MLE_BENCH_EPOCH_LIMIT')
-        self.mle_bench_private_data_dir = self._get_required_env('MLE_BENCH_PRIVATE_DATA_DIR')
+        self.mle_bench_competition = self._get_required_env("MLE_BENCH_COMPETITION")
+        self.mle_bench_server_url = self._get_required_env("MLE_BENCH_SERVER_URL")
+        self.mle_bench_workspace_dir = self._get_required_env("MLE_BENCH_WORKSPACE_DIR")
+        self.mle_bench_time_limit = self._get_required_int_env("MLE_BENCH_TIME_LIMIT")
+        self.time_limit_seconds = self.mle_bench_time_limit * 3600
+        self.mle_bench_epoch_limit = self._get_required_int_env("MLE_BENCH_EPOCH_LIMIT")
+        self.mle_bench_private_data_dir = self._get_required_env("MLE_BENCH_PRIVATE_DATA_DIR")
 
         # 第五阶段：Conda环境配置
-        self.conda_env_name = self._get_required_env('CONDA_ENV_NAME')
+        self.conda_env_name = self._get_required_env("CONDA_ENV_NAME")
 
         # 第六阶段：任务执行配置
-        self.init_task_num = self._get_required_int_env('INIT_TASK_NUM')
-        self.explore_ratio = self._get_required_float_env('EXPLORE_RATIO')
-        self.epoch_task_num = self._get_required_int_env('EPOCH_TASK_NUM')
+        self.init_task_num = self._get_required_int_env("INIT_TASK_NUM")
+        self.explore_ratio = self._get_required_float_env("EXPLORE_RATIO")
+        self.epoch_task_num = self._get_required_int_env("EPOCH_TASK_NUM")
 
         # 第七阶段：进化策略配置（可插拔，指定1/默认为1，指定0则为0）
-        self.use_pheromone_gene_selection = self._get_optional_int_env(
-            "USE_PHEROMONE_GENE_SELECTION", 1
-        ) == 1
+        self.use_pheromone_gene_selection = self._get_optional_int_env("USE_PHEROMONE_GENE_SELECTION", 1) == 1
+
+        # 第八阶段：Submission 验证配置
+        self.enable_submission_validation = self._get_optional_int_env("ENABLE_SUBMISSION_VALIDATION", 0) == 1
+        self.submission_validation_url = os.getenv("SUBMISSION_VALIDATION_URL", "http://localhost:5000/validate")
 
         self._initialized = True
 
@@ -120,7 +122,7 @@ class Config:
             str: 合法的环境变量值
         """
         value = os.getenv(key)
-        if value is None or value.strip() == '':
+        if value is None or value.strip() == "":
             log_msg("ERROR", f"{key}为必填配置，请在.env文件中设置")
         return value
 
@@ -152,13 +154,13 @@ class Config:
             int: 转换后的整数值或默认值
         """
         value_str = os.getenv(key)
-        if value_str is None or value_str.strip() == '':
-             return default
+        if value_str is None or value_str.strip() == "":
+            return default
         try:
             return int(value_str)
         except ValueError:
-             log_msg("WARNING", f"{key}必须为整数，当前值为{value_str}，使用默认值{default}")
-             return default
+            log_msg("WARNING", f"{key}必须为整数，当前值为{value_str}，使用默认值{default}")
+            return default
 
     def _get_required_float_env(self, key: str) -> float:
         """
@@ -186,7 +188,7 @@ class Config:
         返回:
             tuple[bool, str]: (是否验证通过, 错误信息)
         """
-        if self.api_key == 'your_api_key_here':
+        if self.api_key == "your_api_key_here":
             return False, "请将API_KEY替换为实际的API密钥"
 
         return True, ""
@@ -202,10 +204,7 @@ class Config:
             OpenAI: 已注入 API Key 与 Base URL 的客户端实例
         """
         return OpenAI(
-            api_key=self.api_key,
-            base_url=self.api_base,
-            timeout=self.agent_timeout,
-            max_retries=self.max_retries
+            api_key=self.api_key, base_url=self.api_base, timeout=self.agent_timeout, max_retries=self.max_retries
         )
 
     def create_langchain_llm(self):

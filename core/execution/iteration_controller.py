@@ -3,8 +3,9 @@ import os
 import time
 import traceback
 import zipfile
-from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Dict, List, Optional, Set
+
+import httpx
 
 from core.agent.agent_pool import AgentPool
 from core.agent.base_agent import BaseReActAgent
@@ -21,22 +22,31 @@ from core.optimization.version_manager import AgentVersionManager
 from utils.logger_system import log_msg
 
 
-@dataclass
 class TaskExecutionResult:
     """
     任务执行结果的统一封装
     """
 
-    success: bool
-    agent_name: str
-    task_type: str
-    task_id: str
-    agent_output: dict[str, Any]
-    raw_session: Any = None
-    error: str | None = None
-    result_nodes: list[Node] = field(default_factory=list)
-    update_data: dict[str, Any] = field(default_factory=dict)
-    archive_path: str | None = None
+    def __init__(
+        self,
+        success: bool,
+        agent_name: str,
+        task_type: str,
+        task_id: str,
+        agent_output: dict[str, Any],
+        raw_session: Any = None,
+        error: str | None = None,
+    ):
+        self.success = success
+        self.agent_name = agent_name
+        self.task_type = task_type
+        self.task_id = task_id
+        self.agent_output = agent_output
+        self.raw_session = raw_session
+        self.error = error
+        self.result_nodes: list[Node] = []
+        self.update_data: dict[str, Any] = {}
+        self.archive_path: str | None = None
 
 
 class IterationController:
@@ -193,7 +203,15 @@ class IterationController:
 
             # 第二阶段：准备执行上下文
             log_msg("INFO", "[DEBUG] 准备执行上下文...")
-            prepared_data = self._prepare_task_execution(agent, task)
+
+            # [NEW] 执行 Submission 验证 (针对 Review 任务)
+            validation_result = None
+            if task_type == "review":
+                target_id = task["payload"].get("target_node_id")
+                if target_id:
+                    validation_result = await self._validate_submission(task_id, target_id)
+
+            prepared_data = self._prepare_task_execution(agent, task, validation_result)
             log_msg("INFO", "[DEBUG] 上下文准备完成")
 
             # 第三阶段：执行Agent任务
@@ -288,11 +306,51 @@ class IterationController:
             self.gene_registry.update_from_reviewed_node(node)
             self._gene_registry_updated_nodes.add(node_id)
 
+    async def _validate_submission(self, task_id: str, target_node_id: str) -> str | None:
+        """
+        验证 submission.csv 是否合理。
+        遵循：仅在错误时记录 log_msg，成功则静默。
+        """
+        if not self.config.enable_submission_validation:
+            return None
+
+        target_node = self.journal.get_node(target_node_id)
+        if not target_node or not target_node.archive_path or not os.path.exists(target_node.archive_path):
+            return None
+
+        try:
+            with zipfile.ZipFile(target_node.archive_path, "r") as zf:
+                if "submission.csv" not in zf.namelist():
+                    return "Warning: submission.csv was not found in archives."
+
+                with zf.open("submission.csv") as f:
+                    files = {"file": ("submission.csv", f.read())}
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        response = await client.post(self.config.submission_validation_url, files=files)
+
+                        if response.status_code != 200:
+                            log_msg("ERROR", f"Validation server error: HTTP {response.status_code} - {response.text}")
+                            return "Validation service unavailable. Please rely on logs."
+
+                        result_data = response.json()
+                        validation_result = result_data.get("result", "No feedback.")
+
+                        if "invalid" in validation_result.lower():
+                            log_msg("ERROR", f"Validation failed for task {task_id}: {validation_result}")
+
+                        return validation_result
+
+        except Exception as e:
+            log_msg("ERROR", f"Submission validation failed (task {task_id}): {e}")
+            return "Validation service encountered an error."
+
     # ========================================================================
     # Prompt Optimization Methods
     # ========================================================================
 
-    def _prepare_task_execution(self, agent: BaseReActAgent, task: Task) -> dict[str, Any]:
+    def _prepare_task_execution(
+        self, agent: BaseReActAgent, task: Task, validation_result: str | None = None
+    ) -> dict[str, Any]:
         """
         准备任务执行所需的上下文数据
 
@@ -301,7 +359,7 @@ class IterationController:
         """
 
         # 构建Prompt上下文
-        prompt_context = self._construct_prompt_context(task)
+        prompt_context = self._construct_prompt_context(task, validation_result=validation_result)
         task_description = self._get_task_description(task)
 
         return {"prompt_context": prompt_context, "task_description": task_description}
@@ -418,7 +476,7 @@ class IterationController:
         reviewed_prompt_type = target_node.action_type  # 'explore' 或 'merge'
         original_agent_name = target_node.metadata.get("agent_name", agent.name)
         prompt_version_id = target_node.metadata.get("prompt_version_id")  # 获取原始prompt版本ID
-        original_task_id = target_node.metadata.get("task_id")  # 获取原始explore/merge任务ID
+        original_task_id = target_node.metadata.get("task_id") or ""  # 获取原始explore/merge任务ID
 
         await self.version_manager.record_review_result(
             agent_name=original_agent_name,
@@ -502,7 +560,9 @@ class IterationController:
     # Prompt Construction Methods
     # ========================================================================
 
-    def _construct_prompt_context(self, task: Task, step_limit: int | None = None) -> PromptContext:
+    def _construct_prompt_context(
+        self, task: Task, step_limit: int | None = None, validation_result: str | None = None
+    ) -> PromptContext:
         """
         构建Prompt上下文
 
@@ -511,6 +571,7 @@ class IterationController:
         参数:
             task: 任务字典
             step_limit: 步数限制（已根据任务类型确定）
+            validation_result: [NEW] Submission 验证结果
         """
         payload = task.get("payload", {})
 
@@ -587,6 +648,7 @@ class IterationController:
             gene_plan=gene_plan_data if gene_plan_data else payload.get("gene_plan"),
             solution_code=solution_code if solution_code else payload.get("solution_code"),
             execution_logs=execution_logs if execution_logs else payload.get("execution_logs"),
+            submission_validation=validation_result,
             parent_history=payload.get("parent_history"),
             template_name=payload.get("template_name"),
         )

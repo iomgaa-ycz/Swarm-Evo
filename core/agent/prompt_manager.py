@@ -57,6 +57,7 @@ class PromptContext:
     # ========== Evaluate 任务字段 ==========
     solution_code: str | None = None
     execution_logs: str | None = None
+    submission_validation: str | None = None
 
 
 class PromptManager:
@@ -226,10 +227,7 @@ class PromptManager:
         # 准备目录树信息
         file_previews = {}
         try:
-            tree_gen = DirectoryTreeGenerator(
-                workspace_root,
-                ignore_patterns=['.git', '__pycache__', "agent"]
-            )
+            tree_gen = DirectoryTreeGenerator(workspace_root, ignore_patterns=[".git", "__pycache__", "agent"])
             directory_tree, file_previews = tree_gen.generate()
         except Exception as e:
             directory_tree = f"Error generating directory tree: {e}"
@@ -253,20 +251,18 @@ class PromptManager:
             "file_previews": file_previews,
             # 不再需要 history_block，因为历史由 LangGraph 的 messages 管理
             "history_block": "",
-
             # Explore 字段
             "parent_code": context.parent_code,
             "parent_feedback": context.parent_feedback,
             "parent_history": context.parent_history,
             "parent_score": context.parent_score,
-
             # Merge / Select 字段
             "candidates": context.candidates,
             "gene_plan": context.gene_plan,
-
             # Evaluate 字段
             "solution_code": context.solution_code,
             "execution_logs": context.execution_logs,
+            "submission_validation": context.submission_validation,
         }
 
     # ========================================================================

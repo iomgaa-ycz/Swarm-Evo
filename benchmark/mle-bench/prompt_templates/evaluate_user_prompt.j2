@@ -32,6 +32,11 @@ You must rely ONLY on these logs to make a judgement.
 {{ execution_logs }}
 ```
 
+{% if submission_validation %}
+# Automated Submission Validation Result
+{{ submission_validation }}
+{% endif %}
+
 ---
 
 
@@ -48,17 +53,17 @@ A bug exists (**is_bug is true**) if:
 * RuntimeError / ValueError / NameError / ImportError / FileNotFoundError
 * Model training failed to start or crashed
 * Submission step failed
+* **Automated Submission Validation Result contains "invalid!"**
 
 When `is_bug` is true:
-* You MUST quote the **exact** error message and line number from logs in the summary.
+* You MUST quote the **exact** error message and line number from logs **or validation feedback** in the summary.
 * Explain **why** it failed.
 * Provide **one concrete, actionable fix**.
 
 ### 2. Detecting Submission File
-Set **has_csv_submission: true** only if logs show patterns like:
-* "saved to submission/submission.csv"
-* "writing submission.csv"
-* "submission file created"
+Set **has_csv_submission: true** only if:
+* Logs show patterns like: "saved to submission/submission.csv", "writing submission.csv", "submission file created".
+* **AND cross-reference with "Automated Submission Validation Result"** (if it says "file does not exist", set to false).
 If logs do not explicitly show output → set to **false**.
 
 ### 3. Detecting Validation Score
@@ -82,8 +87,8 @@ You MUST give a CRITICAL WARNING in the summary:
 * Always end with an **actionable next step** the agent should perform.
 
 # Evaluation Guidances
-- **Evidence-Based**: Judge ONLY based on execution logs. Don't speculate.
-- **Precise Diagnosis**: Quote exact error messages and line numbers when identifying bugs.
+- **Evidence-Based**: Judge based on execution logs AND the provided **Automated Submission Validation Result**. Don't speculate.
+- **Precise Diagnosis**: Quote exact error messages from logs or validation feedback when identifying bugs.
 - **Actionable Feedback**: Every summary must include a concrete next step for improvement.
 - **Strict Scoring**: Only extract scores explicitly printed in logs. If missing, flag it clearly.
 
