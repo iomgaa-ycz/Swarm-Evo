@@ -47,7 +47,6 @@ def _normalize_score(node: Node, score_min: float | None, score_max: float | Non
     return max(0.0, min(1.0, (node.score - score_min) / score_range))
 
 
-
 def compute_node_pheromone(
     node: Node,
     current_step: int,

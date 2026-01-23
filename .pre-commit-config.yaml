@@ -49,5 +49,5 @@ repos:
         args: ['--maxkb=1000']   # 限制 1MB
 
 # 全局配置
-default_stages: [commit]  # 在 commit 阶段运行
+default_stages: [pre-commit]  # 在 commit 阶段运行
 fail_fast: false  # 继续运行所有检查，不因为一个失败就停止

@@ -20,6 +20,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from core.agent.prompt_manager import PromptContext, PromptManager
@@ -37,6 +38,7 @@ class AgentState(TypedDict):
 
     使用 TypedDict 定义强类型状态，LangGraph 会自动处理状态更新。
     """
+
     # 消息历史列表，使用 add operator 实现追加
     messages: Annotated[Sequence[BaseMessage], operator.add]
     # 当前步数
@@ -57,12 +59,7 @@ class AgentState(TypedDict):
 class AgentSessionResult:
     """Agent 执行结果，保持与旧代码兼容。"""
 
-    def __init__(
-        self,
-        final_answer: dict[str, Any] | None,
-        history: list[dict[str, Any]],
-        success: bool
-    ):
+    def __init__(self, final_answer: dict[str, Any] | None, history: list[dict[str, Any]], success: bool):
         self.final_answer = final_answer
         self.history = history
         self.success = success
@@ -170,15 +167,17 @@ class AgentGraphBuilder:
                     "response": {
                         "content": response.content,
                         "tool_calls": response.tool_calls,
-                        "response_metadata": response.response_metadata
-                    }
+                        "response_metadata": response.response_metadata,
+                    },
                 }
                 log_json(json_data)
 
                 if response.tool_calls:
                     # 获取工具名称和参数用于日志
                     tool_calls_info = [f"{tc['name']}" for tc in response.tool_calls]
-                    log_msg("INFO", f"Agent '{agent_name}' Step {step_count}: 调用 LLM，请求工具 {tool_calls_info} 成功")
+                    log_msg(
+                        "INFO", f"Agent '{agent_name}' Step {step_count}: 调用 LLM，请求工具 {tool_calls_info} 成功"
+                    )
                 else:
                     log_msg("INFO", f"Agent '{agent_name}' Step {step_count}: 调用 LLM，返回最终回复 成功")
 
@@ -190,11 +189,7 @@ class AgentGraphBuilder:
         except Exception as e:
             msg = f"Agent '{agent_name}' Step {step_count}: 调用 LLM 失败: {e}"
             log_msg("ERROR", msg)
-            log_json({
-                "agent_name": agent_name,
-                "step_count": step_count,
-                "error": str(e)
-            })
+            log_json({"agent_name": agent_name, "step_count": step_count, "error": str(e)})
             # 返回错误消息
             error_msg = AIMessage(content=f"LLM 调用失败: {e}")
             return {
@@ -232,10 +227,7 @@ class AgentGraphBuilder:
             if tool_name not in tool_map:
                 error_content = f"未知工具: {tool_name}"
                 log_msg("ERROR", error_content)
-                tool_messages.append(ToolMessage(
-                    content=error_content,
-                    tool_call_id=tool_call_id
-                ))
+                tool_messages.append(ToolMessage(content=error_content, tool_call_id=tool_call_id))
                 continue
 
             try:
@@ -243,21 +235,15 @@ class AgentGraphBuilder:
                 # 直接调用工具
                 result = tool.invoke(tool_args)
                 # log_msg("INFO", f"Agent '{agent_name}' 工具 {tool_name} 执行成功")
-                tool_messages.append(ToolMessage(
-                    content=str(result),
-                    tool_call_id=tool_call_id
-                ))
+                tool_messages.append(ToolMessage(content=str(result), tool_call_id=tool_call_id))
             except Exception as e:
                 error_content = f"工具执行失败: {e}"
                 log_msg("ERROR", f"Agent '{agent_name}' {error_content}")
-                tool_messages.append(ToolMessage(
-                    content=error_content,
-                    tool_call_id=tool_call_id
-                ))
+                tool_messages.append(ToolMessage(content=error_content, tool_call_id=tool_call_id))
 
         return {"messages": tool_messages}
 
-    def build(self) -> StateGraph:
+    def build(self) -> CompiledStateGraph[AgentState, None, AgentState, AgentState]:
         """
         构建并返回编译后的图。
 
@@ -281,7 +267,7 @@ class AgentGraphBuilder:
             {
                 "tools": "tools",
                 "end": END,
-            }
+            },
         )
 
         # 工具执行后返回 agent
@@ -335,13 +321,11 @@ class BaseReActAgent:
             tools=tools,
             max_steps=max_steps,
         )
-        self.graph = builder.build()
+        # 显式指定类型以满足 Pyright
+        self.graph: CompiledStateGraph[AgentState, None, AgentState, AgentState] = builder.build()
 
     async def run(
-        self,
-        task_instruction: str,
-        prompt_context: PromptContext,
-        max_steps: int | None = None
+        self, task_instruction: str, prompt_context: PromptContext, max_steps: int | None = None
     ) -> AgentSessionResult:
         """
         执行 Agent 任务。
@@ -358,8 +342,7 @@ class BaseReActAgent:
 
         # 构建初始消息
         initial_messages = self.prompt_manager.build_initial_messages(
-            context=prompt_context,
-            task_instruction=task_instruction
+            context=prompt_context, task_instruction=task_instruction
         )
 
         current_max_steps = max_steps if max_steps is not None else self.max_steps
@@ -377,10 +360,7 @@ class BaseReActAgent:
         try:
             # 执行图
             # 设置 recursion_limit 为 max_steps * 3，确保能覆盖 Agent->Tools->Agent 循环
-            final_state = await self.graph.ainvoke(
-                initial_state,
-                config={"recursion_limit": current_max_steps * 3 + 2}
-            )
+            final_state = await self.graph.ainvoke(initial_state, config={"recursion_limit": current_max_steps * 3 + 2})
 
             # 提取结果
             messages = final_state.get("messages", [])
@@ -391,6 +371,8 @@ class BaseReActAgent:
             for msg in reversed(messages):
                 if isinstance(msg, AIMessage) and not msg.tool_calls:
                     content = msg.content
+                    if not isinstance(content, str):
+                        content = str(content)
                     # 尝试解析 JSON (兼容 Select/Review 等需要结构化输出的任务)
                     try:
                         # 对于非 JSON 任务 (Merge/Explore)，解析失败是正常的，因此抑制错误日志
@@ -411,26 +393,18 @@ class BaseReActAgent:
                 final_answer = {
                     "content": "Error: Agent failed to produce a final answer (likely max steps reached).",
                     "error": "no_final_answer",
-                    "step_count": step_count
+                    "step_count": step_count,
                 }
 
             success = final_answer is not None and step_count <= self.max_steps
 
             log_msg("INFO", f"Agent '{self.name}' 任务完成, 步数: {step_count}, 成功: {success}")
 
-            return AgentSessionResult(
-                final_answer=final_answer,
-                history=history,
-                success=success
-            )
+            return AgentSessionResult(final_answer=final_answer, history=history, success=success)
 
         except Exception as e:
             log_msg("ERROR", f"Agent '{self.name}' 执行失败: {e}")
-            return AgentSessionResult(
-                final_answer={"error": str(e)},
-                history=[],
-                success=False
-            )
+            return AgentSessionResult(final_answer={"error": str(e)}, history=[], success=False)
 
     def _extract_history(self, messages: Sequence[BaseMessage]) -> list[dict[str, Any]]:
         """
@@ -441,17 +415,19 @@ class BaseReActAgent:
         history = []
         step = 0
 
-        for i, msg in enumerate(messages):
+        for msg in messages:
             if isinstance(msg, AIMessage):
                 if msg.tool_calls:
                     for tc in msg.tool_calls:
-                        history.append({
-                            "step": step,
-                            "type": "action",
-                            "tool": tc["name"],
-                            "input": tc["args"],
-                            "task": "Tool Call",
-                        })
+                        history.append(
+                            {
+                                "step": step,
+                                "type": "action",
+                                "tool": tc["name"],
+                                "input": tc["args"],
+                                "task": "Tool Call",
+                            }
+                        )
                         step += 1
             elif isinstance(msg, ToolMessage):
                 # 找到对应的历史记录并添加 observation

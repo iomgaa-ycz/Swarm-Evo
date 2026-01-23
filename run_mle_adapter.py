@@ -43,18 +43,15 @@ async def run_adapter():
         "API_KEY": os.environ.get("API_KEY", "your_api_key_here"),
         "API_BASE": os.environ.get("API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         "MODEL_NAME": os.environ.get("MODEL_NAME", "qwen-max"),
-
         # 日志配置
         "LOG_LEVEL": "INFO",
         "LOG_DIR": "/home/logs",
-
         # 实验配置
         "RANDOM_SEED": "42",
         "MAX_CONCURRENT_AGENTS": "1",
         "AGENT_TIMEOUT": "3600",
         "AGENT_NUM": os.environ.get("AGENT_NUM", "1"),
         "AGENT_CONFIG_DIR": "/home/agent/core/config/agent.json",
-
         # MLE-Bench 配置
         "MLE_BENCH_COMPETITION": competition_id,
         "MLE_BENCH_SERVER_URL": "http://localhost:5000",
@@ -62,10 +59,8 @@ async def run_adapter():
         "MLE_BENCH_TIME_LIMIT": os.environ.get("TIME_LIMIT", "12"),
         "MLE_BENCH_EPOCH_LIMIT": os.environ.get("STEP_LIMIT", "100"),
         "MLE_BENCH_PRIVATE_DATA_DIR": "/private/data",
-
         # Conda 环境
         "CONDA_ENV_NAME": os.environ.get("CONDA_ENV_NAME", "base"),
-
         # 任务执行配置
         "INIT_TASK_NUM": "2",
         "EXPLORE_RATIO": "0.6",
@@ -195,11 +190,7 @@ Save your predictions to: {submission_dir / "submission.csv"}
         }
 
     try:
-        agent_pool = AgentPool.from_configs(
-            agents_num=config.agent_num,
-            config=agent_config_dict,
-            llm=llm
-        )
+        agent_pool = AgentPool.from_configs(agents_num=config.agent_num, config=agent_config_dict, llm=llm)
         log_msg("INFO", f"AgentPool 创建成功，共 {config.agent_num} 个 Agent")
     except Exception as e:
         log_msg("ERROR", f"AgentPool 创建失败: {e}")
@@ -230,7 +221,7 @@ Save your predictions to: {submission_dir / "submission.csv"}
             task_pipeline=pipeline,
             journal=journal,
             config=config,
-            competition_description=description_content
+            competition_description=description_content,
         )
         log_msg("INFO", "IterationController 创建成功")
 
@@ -256,7 +247,8 @@ Save your predictions to: {submission_dir / "submission.csv"}
         if best_node and best_node.archive_path and os.path.exists(best_node.archive_path):
             log_msg("INFO", f"正在从归档恢复最佳方案: {best_node.archive_path}")
             import zipfile
-            with zipfile.ZipFile(best_node.archive_path, 'r') as zip_ref:
+
+            with zipfile.ZipFile(best_node.archive_path, "r") as zip_ref:
                 zip_ref.extractall(workspace_dir)
             log_msg("INFO", "✅ 最佳方案文件已恢复到工作目录")
     except Exception as e:

@@ -18,22 +18,10 @@ from utils.logger_system import log_msg
 class Config:
     """
     环境变量配置类
-
-    负责加载和管理所有环境变量配置，包括：
-    - LLM API配置
-    - 日志配置
-    - 实验配置
-    - MLE-bench配置
-    - Conda环境配置
-
-    使用方式:
-        from utils.config import get_config
-        config = get_config()
-        api_key = config.api_key
-        conda_env = config.conda_env_name
     """
 
     _instance: Optional["Config"] = None
+    _initialized: bool = False
 
     def __new__(cls) -> "Config":
         """
@@ -124,6 +112,7 @@ class Config:
         value = os.getenv(key)
         if value is None or value.strip() == "":
             log_msg("ERROR", f"{key}为必填配置，请在.env文件中设置")
+            raise ValueError(f"{key} is required")
         return value
 
     def _get_required_int_env(self, key: str) -> int:
@@ -141,6 +130,24 @@ class Config:
             return int(value_str)
         except ValueError:
             log_msg("ERROR", f"{key}必须为整数，当前值为{value_str}")
+            raise
+
+    def _get_required_float_env(self, key: str) -> float:
+        """
+        读取必需的浮点数环境变量，包含数值合法性校验
+
+        参数:
+            key: 环境变量名称
+
+        返回:
+            float: 转换后的浮点数值
+        """
+        value_str = self._get_required_env(key)
+        try:
+            return float(value_str)
+        except ValueError:
+            log_msg("ERROR", f"{key}必须为浮点数，当前值为{value_str}")
+            raise
 
     def _get_optional_int_env(self, key: str, default: int) -> int:
         """
@@ -161,22 +168,6 @@ class Config:
         except ValueError:
             log_msg("WARNING", f"{key}必须为整数，当前值为{value_str}，使用默认值{default}")
             return default
-
-    def _get_required_float_env(self, key: str) -> float:
-        """
-        读取必需的浮点数环境变量，包含数值合法性校验
-
-        参数:
-            key: 环境变量名称
-
-        返回:
-            float: 转换后的浮点数值
-        """
-        value_str = self._get_required_env(key)
-        try:
-            return float(value_str)
-        except ValueError:
-            log_msg("ERROR", f"{key}必须为浮点数，当前值为{value_str}")
 
     def validate(self) -> tuple[bool, str]:
         """
@@ -226,7 +217,7 @@ class Config:
             api_key=self.api_key,
             base_url=self.api_base,
             temperature=0.2,
-            request_timeout=self.agent_timeout,
+            timeout=float(self.agent_timeout),
             max_retries=self.max_retries,
         )
 

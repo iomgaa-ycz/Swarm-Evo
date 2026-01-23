@@ -23,12 +23,12 @@ class LoggerSystem:
         self.json_data: list[dict[str, Any]] = []
         if os.path.exists(self.json_log_path):
             try:
-                with open(self.json_log_path, encoding='utf-8') as f:
+                with open(self.json_log_path, encoding="utf-8") as f:
                     content = f.read()
                     if content:
                         self.json_data = json.loads(content)
             except json.JSONDecodeError:
-                self.json_data = [] # Reset if corrupt
+                self.json_data = []  # Reset if corrupt
 
     def text_log(self, level: str, message: str) -> None:
         """
@@ -42,7 +42,7 @@ class LoggerSystem:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] [{level}] {message}\n"
 
-        with open(self.text_log_path, 'a', encoding='utf-8') as f:
+        with open(self.text_log_path, "a", encoding="utf-8") as f:
             f.write(log_entry)
             f.flush()  # 立即写入磁盘
 
@@ -50,7 +50,7 @@ class LoggerSystem:
         print(log_entry.strip())
 
         # Auto-raise on error
-        if level.upper() in ['ERROR', 'CRITICAL']:
+        if level.upper() in ["ERROR", "CRITICAL"]:
             raise Exception(message)
 
     def json_log(self, data: dict[str, Any]) -> None:
@@ -62,17 +62,19 @@ class LoggerSystem:
         """
         self.json_data.append(data)
 
-
-        with open(self.json_log_path, 'w', encoding='utf-8') as f:
+        with open(self.json_log_path, "w", encoding="utf-8") as f:
             json.dump(self.json_data, f, indent=4, ensure_ascii=False)
+
 
 # Global logger instance
 logger = None
+
 
 def init_logger(log_dir: str) -> LoggerSystem:
     global logger
     logger = LoggerSystem(log_dir)
     return logger
+
 
 def log_msg(level: str, message: str) -> None:
     """Safe logging function that falls back to print/raise if logger is not initialized."""
@@ -81,8 +83,9 @@ def log_msg(level: str, message: str) -> None:
     else:
         # Fallback
         print(f"[{level}] {message}")
-        if level.upper() in ['ERROR', 'CRITICAL']:
+        if level.upper() in ["ERROR", "CRITICAL"]:
             raise Exception(message)
+
 
 def log_json(data: dict[str, Any]) -> None:
     """Safe logging function for JSON data."""

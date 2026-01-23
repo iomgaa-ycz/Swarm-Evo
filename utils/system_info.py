@@ -23,7 +23,8 @@ def get_cpu_count() -> int:
     """
     count = os.cpu_count()
     if count is None:
-        log_msg("ERROR", "Failed to get CPU count: os.cpu_count() returned None")
+        log_msg("WARNING", "Failed to get CPU count: os.cpu_count() returned None, defaulting to 1")
+        return 1
     return count
 
 
@@ -39,17 +40,21 @@ def get_memory_info() -> dict[str, float]:
         - 其他系统: 尝试使用psutil库，失败则返回默认值
     """
     if platform.system() == "Linux":
-        # 第一阶段：读取 /proc/meminfo
-        with open("/proc/meminfo") as f:
-            meminfo = f.read()
+        try:
+            # 第一阶段：读取 /proc/meminfo
+            if os.path.exists("/proc/meminfo"):
+                with open("/proc/meminfo") as f:
+                    meminfo = f.read()
 
-        # 第二阶段：解析总内存
-        for line in meminfo.split("\n"):
-            if line.startswith("MemTotal:"):
-                # 提取内存大小（单位：KB）
-                mem_kb = int(line.split()[1])
-                mem_gb = mem_kb / (1024 * 1024)
-                return {"total": round(mem_gb, 2), "available": round(mem_gb, 2)}
+                # 第二阶段：解析总内存
+                for line in meminfo.split("\n"):
+                    if line.startswith("MemTotal:"):
+                        # 提取内存大小（单位：KB）
+                        mem_kb = int(line.split()[1])
+                        mem_gb = mem_kb / (1024 * 1024)
+                        return {"total": round(mem_gb, 2), "available": round(mem_gb, 2)}
+        except Exception:
+            pass
 
     # 尝试使用psutil（如果已安装）
     try:
@@ -62,6 +67,7 @@ def get_memory_info() -> dict[str, float]:
 
     # 如果无法获取内存信息，抛出异常
     log_msg("ERROR", "Failed to get memory info: /proc/meminfo parsing failed and psutil not available")
+    raise RuntimeError("Could not retrieve memory information")
 
 
 def get_gpu_info() -> str | None:
@@ -320,7 +326,10 @@ def get_conda_packages(env_name: str | None = None) -> str:
 
     except subprocess.TimeoutExpired:
         log_msg("ERROR", "conda list command timed out")
+        raise
     except FileNotFoundError:
         log_msg("ERROR", "conda command unavailable, please ensure conda is installed and added to PATH")
+        raise
     except Exception as e:
         log_msg("ERROR", f"Unknown error occurred while getting conda package info: {e}")
+        raise

@@ -15,7 +15,7 @@
 - **版本管理**: Git
 
 ## 2. 常用命令 (Commands)
-- **安装依赖**: 
+- **安装依赖**:
   ```bash
   conda create -n swarm-evo python=3.12 -y
   conda activate swarm-evo
@@ -75,12 +75,12 @@
   - 示例：
     ```python
     from utils.logger_system import log_msg, log_json
-    
+
     # 文本日志
     log_msg("INFO", "Agent 开始执行任务")
     log_msg("WARNING", "检测到潜在问题")
     log_msg("ERROR", "任务执行失败: xxx")  # 自动 raise Exception
-    
+
     # JSON 日志
     log_json({"agent_name": "Agent1", "step": 3, "action": "tool_call"})
     ```

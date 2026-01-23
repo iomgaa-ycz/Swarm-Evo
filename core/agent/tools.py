@@ -97,9 +97,9 @@ class ListDirectoryTool(BaseTool):
             result_lines.append("(Summary view for > 20 items)")
 
             # Categorize
-            dirs = []
-            files_by_ext = {}
-            others = []
+            dirs: list[str] = []
+            files_by_ext: dict[str, list[str]] = {}
+            others: list[str] = []
 
             for item in items:
                 full_item_path = os.path.join(path, item)

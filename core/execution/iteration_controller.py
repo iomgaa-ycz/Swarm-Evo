@@ -3,7 +3,7 @@ import os
 import time
 import traceback
 import zipfile
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import httpx
 
@@ -333,7 +333,8 @@ class IterationController:
                             return "Validation service unavailable. Please rely on logs."
 
                         result_data = response.json()
-                        validation_result = result_data.get("result", "No feedback.")
+                        validation_result_raw = result_data.get("result", "No feedback.")
+                        validation_result = str(validation_result_raw)
 
                         if "invalid" in validation_result.lower():
                             log_msg("ERROR", f"Validation failed for task {task_id}: {validation_result}")
@@ -595,14 +596,16 @@ class IterationController:
                         payload["parent_score"] = parent_node.score
 
         # 动态填充数据
-        candidates_data = {}
-        gene_plan_data = {}
-        solution_code = None
-        execution_logs = None
+        candidates_data: dict[str, str] = {}
+        gene_plan_data: dict[str, Any] = {}
+        solution_code: str | None = None
+        execution_logs: str | None = None
 
         if task["type"] == "merge":
             # Merge 任务逻辑更新
-            gene_plan_data = payload.get("gene_plan")
+            gene_plan_raw = payload.get("gene_plan")
+            if isinstance(gene_plan_raw, dict):
+                gene_plan_data = gene_plan_raw
             # 仍然需要 candidate code 用于 materialization
             candidate_ids = payload.get("candidate_ids", [])
             # 如果 gene_plan 存在，sources 也应该作为 candidates
@@ -970,6 +973,10 @@ class IterationController:
                 return
 
             # 第二阶段: 使用反思器分析版本
+            if self.reflector is None:
+                log_msg("WARNING", "Reflector not available")
+                return
+
             reflection_result = await self.reflector.analyze_version(version_record=current_version)
 
             log_msg(
@@ -988,6 +995,10 @@ class IterationController:
             log_msg("INFO", f"已更新版本reflection: {current_version.version_id}")
 
             # 第四阶段: 使用生成器生成新prompt
+            if self.generator is None:
+                log_msg("WARNING", "Generator not available")
+                return
+
             current_prompt = current_version.prompt_content
             generation_result = await self.generator.generate_new_prompt(
                 agent_name=agent_name,
@@ -1007,6 +1018,10 @@ class IterationController:
             )
 
             # 第五阶段: 应用新prompt
+            if self.generator is None:
+                log_msg("ERROR", "Generator vanished during execution")
+                return
+
             applied = await self.generator.apply_new_prompt(
                 prompt_type=task_type, new_prompt=generation_result.new_prompt, version=generation_result.version
             )

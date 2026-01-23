@@ -20,6 +20,7 @@ from core.optimization.version_manager import PromptVersionRecord
 @dataclass
 class PerformanceMetrics:
     """性能指标"""
+
     avg_accuracy: float  # 平均准确率
     avg_generation_rate: float  # 平均生成率
     submission_count: int  # 有submission的数量
@@ -32,11 +33,7 @@ class PromptReflector:
     分析特定prompt的执行效果，并提供改进建议
     """
 
-    def __init__(
-        self,
-        llm: BaseChatModel,
-        prompt_manager: PromptManager
-    ):
+    def __init__(self, llm: BaseChatModel, prompt_manager: PromptManager):
         """
         初始化反思器
 
@@ -53,7 +50,7 @@ class PromptReflector:
         prompt_content: str,
         metrics: PerformanceMetrics,
         used_count: int,
-        additional_context: dict[str, Any] | None = None
+        additional_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         对prompt进行反思，生成改进建议
@@ -74,7 +71,7 @@ class PromptReflector:
             prompt_content=prompt_content,
             metrics=metrics,
             used_count=used_count,
-            additional_context=additional_context or {}
+            additional_context=additional_context or {},
         )
 
         try:
@@ -88,12 +85,7 @@ class PromptReflector:
             return reflection_result
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "suggestions": [],
-                "analysis": "反思器调用失败"
-            }
+            return {"success": False, "error": str(e), "suggestions": [], "analysis": "反思器调用失败"}
 
     def _build_reflection_messages(
         self,
@@ -101,7 +93,7 @@ class PromptReflector:
         prompt_content: str,
         metrics: PerformanceMetrics,
         used_count: int,
-        additional_context: dict[str, Any]
+        additional_context: dict[str, Any],
     ) -> list:
         """
         构建用于LLM反思的消息
@@ -117,13 +109,13 @@ class PromptReflector:
             "avg_generation_rate": metrics.avg_generation_rate,
             "used_count": used_count,
             "submission_count": metrics.submission_count,
-            "additional_context": additional_context
+            "additional_context": additional_context,
         }
 
         return MessageBuilder.build_llm_messages(
             template_content=template_content,
             template_vars=template_vars,
-            human_message="请基于以上数据分析这个prompt的表现，并提供具体的改进建议。"
+            human_message="请基于以上数据分析这个prompt的表现，并提供具体的改进建议。",
         )
 
     def _parse_reflection_response(self, response_content: str) -> dict[str, Any]:
@@ -141,13 +133,11 @@ class PromptReflector:
                 "suggestions": [],
                 "analysis": response_content,
                 "raw_response": response_content,
-                "parse_error": "JSON解析失败"
+                "parse_error": "JSON解析失败",
             }
 
     async def analyze_version(
-        self,
-        version_record: PromptVersionRecord,
-        additional_context: dict[str, Any] | None = None
+        self, version_record: PromptVersionRecord, additional_context: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """
         分析特定prompt版本的执行效果，生成改进建议（reflection）
@@ -164,19 +154,21 @@ class PromptReflector:
         # 第一阶段: 从版本记录中提取review结果
         review_results = []
         for review in version_record.review_records:
-            review_results.append({
-                'num': review.num,
-                'task_score': review.task_score,
-                'has_submission': review.has_submission,
-                'task_id': review.task_id,
-                'node_count': len(review.node_metadata)
-            })
+            review_results.append(
+                {
+                    "num": review.num,
+                    "task_score": review.task_score,
+                    "has_submission": review.has_submission,
+                    "task_id": review.task_id,
+                    "node_count": len(review.node_metadata),
+                }
+            )
 
         # 第二阶段: 使用版本记录中已计算的指标
         metrics_from_version = PerformanceMetrics(
             avg_accuracy=version_record.avg_accuracy,
             avg_generation_rate=version_record.avg_generation_rate,
-            submission_count=len([r for r in version_record.review_records if r.has_submission])
+            submission_count=len([r for r in version_record.review_records if r.has_submission]),
         )
 
         # 第三阶段: 进行反思分析
@@ -188,8 +180,8 @@ class PromptReflector:
             additional_context={
                 "review_results": review_results,
                 "version_id": version_record.version_id,
-                **(additional_context or {})
-            }
+                **(additional_context or {}),
+            },
         )
 
         # 第四阶段: 组合完整结果
@@ -201,12 +193,11 @@ class PromptReflector:
                 "avg_generation_rate": metrics_from_version.avg_generation_rate,
                 "composite_score": version_record.composite_score,
                 "used_count": version_record.used_count,
-                "submission_count": metrics_from_version.submission_count
+                "submission_count": metrics_from_version.submission_count,
             },
             "review_records": review_results,
             "reflection": reflection_result,
-            "current_prompt": version_record.prompt_content
+            "current_prompt": version_record.prompt_content,
         }
 
         return result
-

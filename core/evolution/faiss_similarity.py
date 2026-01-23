@@ -19,8 +19,9 @@ def all_pairs_cosine(vectors: np.ndarray) -> np.ndarray:
     """Compute clamped cosine similarity matrix for normalized vectors."""
     if vectors.dtype != np.float32:
         vectors = vectors.astype(np.float32)
-    index = build_ip_index(vectors)
-    sims = faiss.vector_to_array(index.compute_inner_products(vectors))
-    sims = sims.reshape(len(vectors), len(vectors))
+
+    # Assume vectors are already L2-normalized by embedding_manager
+    # Inner product of normalized vectors is cosine similarity
+    sims = vectors @ vectors.T
     sims = np.clip((sims + 1.0) / 2.0, 0.0, 1.0)
     return sims

@@ -95,7 +95,7 @@ async def main_mle_bench_competition() -> None:
         # 2. 读取 Agent 配置
         agent_config_path = Path("core/config/agent.json")
         if not agent_config_path.exists():
-             log_msg("ERROR", f"Agent配置文件未找到: {agent_config_path}")
+            log_msg("ERROR", f"Agent配置文件未找到: {agent_config_path}")
 
         with open(agent_config_path, encoding="utf-8") as f:
             agent_config_dict = json.load(f)
@@ -104,11 +104,7 @@ async def main_mle_bench_competition() -> None:
         agent_config_dict["conda_env_name"] = config.conda_env_name
 
         # 4. 批量创建并注册
-        agent_pool = AgentPool.from_configs(
-            agents_num=config.agent_num,
-            config=agent_config_dict,
-            llm=llm
-        )
+        agent_pool = AgentPool.from_configs(agents_num=config.agent_num, config=agent_config_dict, llm=llm)
 
         log_msg("INFO", f"✅ AgentPool 创建成功, 已注册 {config.agent_num} 个 Agent")
     except Exception as e:
@@ -135,7 +131,7 @@ async def main_mle_bench_competition() -> None:
             journal=journal,
             config=config,
             competition_description=description_content,
-            conda_packages=conda_packages
+            conda_packages=conda_packages,
         )
 
         # 4. 运行
@@ -152,32 +148,31 @@ async def main_mle_bench_competition() -> None:
         # TODO: 从 journal 读取并展示最佳结果
         best_node = journal.get_best_node()
         if best_node:
-             log_msg("INFO", f"最佳方案 ID: {best_node.id}, Score: {best_node.score}")
+            log_msg("INFO", f"最佳方案 ID: {best_node.id}, Score: {best_node.score}")
 
-             # [NEW Logic] Extract archived solution and submission
-             if best_node.archive_path and os.path.exists(best_node.archive_path):
-                 final_submission_dir = os.path.join(config.mle_bench_workspace_dir, "final_submission")
-                 os.makedirs(final_submission_dir, exist_ok=True)
+            # [NEW Logic] Extract archived solution and submission
+            if best_node.archive_path and os.path.exists(best_node.archive_path):
+                final_submission_dir = os.path.join(config.mle_bench_workspace_dir, "final_submission")
+                os.makedirs(final_submission_dir, exist_ok=True)
 
-                 try:
-                     with zipfile.ZipFile(best_node.archive_path, 'r') as zip_ref:
-                         zip_ref.extractall(final_submission_dir)
-                     log_msg("INFO", f"✅ 最终结果已提取至: {final_submission_dir}")
+                try:
+                    with zipfile.ZipFile(best_node.archive_path, "r") as zip_ref:
+                        zip_ref.extractall(final_submission_dir)
+                    log_msg("INFO", f"✅ 最终结果已提取至: {final_submission_dir}")
 
-                     # 可以在此处添加重命名逻辑，如果需要的话
-                     # 比如把解压出来的 solution.py 重命名为 best_solution.py
+                    # 可以在此处添加重命名逻辑，如果需要的话
+                    # 比如把解压出来的 solution.py 重命名为 best_solution.py
 
-                 except Exception as e:
-                     log_msg("ERROR", f"提取最终结果失败: {e}")
-             else:
-                 log_msg("WARNING", "最佳方案未找到归档文件，仅显示 Score。")
+                except Exception as e:
+                    log_msg("ERROR", f"提取最终结果失败: {e}")
+            else:
+                log_msg("WARNING", "最佳方案未找到归档文件，仅显示 Score。")
 
         else:
-             log_msg("WARNING", "未找到有效方案")
+            log_msg("WARNING", "未找到有效方案")
 
     except Exception as e:
         log_msg("ERROR", f"结果展示失败: {e}")
-
 
 
 if __name__ == "__main__":

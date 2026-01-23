@@ -1,6 +1,6 @@
 import json
 
-file_path = '/home/iomgaa/Code/Swarm-Evo/workspace/logs/metrics.json'
+file_path = "/home/iomgaa/Code/Swarm-Evo/workspace/logs/metrics.json"
 
 try:
     with open(file_path) as f:
@@ -10,7 +10,7 @@ try:
 
     success_count = 0
     for i, entry in enumerate(data):
-        observation_str = entry.get('observation', '{}')
+        observation_str = entry.get("observation", "{}")
         try:
             if isinstance(observation_str, str):
                 obs = json.loads(observation_str)
@@ -18,21 +18,21 @@ try:
                 obs = observation_str
 
             if isinstance(obs, dict):
-                 if obs.get('ok') is True:
-                     success_count += 1
-                     print(f"\\n--- Entry {i} (Success) ---")
-                     obs_data = obs.get('data', {})
-                     if obs_data:
-                         if isinstance(obs_data, dict):
-                             if obs_data.get('type') == 'WriteFileResult':
-                                 print("Type: WriteFile")
-                                 print(f"Path: {obs_data.get('path')}")
-                             else:
-                                 print(f"Type: {obs_data.get('type', 'Unknown')}")
-                                 preview = str(obs_data)[:2000].replace('\\n', ' ')
-                                 print(f"Output: {preview}...")
-                         else:
-                             print(f"Data: {str(obs_data)[:200]}")
+                if obs.get("ok") is True:
+                    success_count += 1
+                    print(f"\\n--- Entry {i} (Success) ---")
+                    obs_data = obs.get("data", {})
+                    if obs_data:
+                        if isinstance(obs_data, dict):
+                            if obs_data.get("type") == "WriteFileResult":
+                                print("Type: WriteFile")
+                                print(f"Path: {obs_data.get('path')}")
+                            else:
+                                print(f"Type: {obs_data.get('type', 'Unknown')}")
+                                preview = str(obs_data)[:2000].replace("\\n", " ")
+                                print(f"Output: {preview}...")
+                        else:
+                            print(f"Data: {str(obs_data)[:200]}")
         except Exception:
             pass
 

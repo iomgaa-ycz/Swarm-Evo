@@ -13,8 +13,15 @@ class DirectoryTreeGenerator:
     旨在为 LLM 提供清晰的文件系统上下文，包含文件大小和目录项统计等元数据。
     """
 
-    def __init__(self, root_path: str, max_depth: int = None, ignore_patterns: list = None,
-                 collapse_extensions: list = None, collapse_threshold: int = 3, preview_files: list = None):
+    def __init__(
+        self,
+        root_path: str,
+        max_depth: int | None = None,
+        ignore_patterns: list | None = None,
+        collapse_extensions: list | None = None,
+        collapse_threshold: int = 3,
+        preview_files: list | None = None,
+    ):
         """
         初始化目录树生成器。
 
@@ -29,43 +36,75 @@ class DirectoryTreeGenerator:
         """
         self.root_path = pathlib.Path(root_path)
         self.max_depth = max_depth
-        self.ignore_patterns = ignore_patterns or ['.git', '__pycache__', '.DS_Store']
+        self.ignore_patterns = ignore_patterns or [".git", "__pycache__", ".DS_Store"]
 
         # 默认的折叠后缀列表
         default_collapse = [
             # Images
-            'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp', 'svg', 'ico',
+            "jpg",
+            "jpeg",
+            "png",
+            "gif",
+            "bmp",
+            "tiff",
+            "webp",
+            "svg",
+            "ico",
             # Videos
-            'mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm',
+            "mp4",
+            "mkv",
+            "avi",
+            "mov",
+            "wmv",
+            "flv",
+            "webm",
             # Data / Config
-            'json', 'csv', 'xml', 'yaml', 'yml', 'toml', 'ini',
+            "json",
+            "csv",
+            "xml",
+            "yaml",
+            "yml",
+            "toml",
+            "ini",
             # Archives
-            'zip', 'tar', 'gz', 'rar', '7z',
+            "zip",
+            "tar",
+            "gz",
+            "rar",
+            "7z",
             # Documents
-            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md',
+            "pdf",
+            "doc",
+            "docx",
+            "xls",
+            "xlsx",
+            "ppt",
+            "pptx",
+            "txt",
+            "md",
             # Others
-            'HEIC'
+            "HEIC",
         ]
         self.collapse_extensions = collapse_extensions if collapse_extensions is not None else default_collapse
         # normalize to lowercase and ensure no leading dots
-        self.collapse_extensions = [ext.lower().lstrip('.') for ext in self.collapse_extensions]
+        self.collapse_extensions = [ext.lower().lstrip(".") for ext in self.collapse_extensions]
 
         self.collapse_threshold = collapse_threshold
-        self.preview_files = preview_files if preview_files is not None else ['sample_submission.csv', 'train.csv']
+        self.preview_files = preview_files if preview_files is not None else ["sample_submission.csv", "train.csv"]
 
         if not self.root_path.exists():
             raise FileNotFoundError(f"Path not found: {root_path}")
         if not self.root_path.is_dir():
-             raise NotADirectoryError(f"Path is not a directory: {root_path}")
+            raise NotADirectoryError(f"Path is not a directory: {root_path}")
 
-    def generate(self) -> tuple[str, dict]:
+    def generate(self) -> tuple[str, dict[str, str]]:
         """
         生成 Markdown 格式的目录树字符串和文件预览字典。
 
         Returns:
             tuple[str, dict]: (包含 ASCII 树的 Markdown 代码块, 文件预览字典 {abs_path: content})
         """
-        self.collected_previews = {}
+        self.collected_previews: dict[str, str] = {}
         root_label = self._format_node_label(self.root_path, is_root=True)
         tree = Tree(root_label)
 
@@ -80,11 +119,11 @@ class DirectoryTreeGenerator:
         """
         try:
             lines_to_read = 5
-            if file_path.suffix.lower() == '.md':
+            if file_path.suffix.lower() == ".md":
                 lines_to_read = 10
 
             preview_lines = []
-            with open(file_path, encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:
                 for _ in range(lines_to_read):
                     line = f.readline()
                     if not line:
@@ -128,10 +167,10 @@ class DirectoryTreeGenerator:
 
         # 2. 统计文件后缀，决定哪些需要折叠
         # extension_counts: { 'jpg': [file_path1, file_path2, ...], ... }
-        extension_groups = {}
+        extension_groups: dict[str, list[pathlib.Path]] = {}
         for f in files:
             # 获取后缀 (不带点，转小写)
-            ext = f.suffix.lstrip('.').lower()
+            ext = f.suffix.lstrip(".").lower()
             if ext in self.collapse_extensions:
                 if ext not in extension_groups:
                     extension_groups[ext] = []
@@ -153,7 +192,7 @@ class DirectoryTreeGenerator:
 
         # 4. 添加未折叠的具体文件
         for f in files:
-            ext = f.suffix.lstrip('.').lower()
+            ext = f.suffix.lstrip(".").lower()
             # 如果该文件的后缀被折叠了，则跳过
             if ext in collapsed_extensions:
                 continue
@@ -195,26 +234,27 @@ class DirectoryTreeGenerator:
             # 文件显示大小
             try:
                 size = path.stat().st_size
-                human_size = humanize.naturalsize(size, binary=True) # binary=True 使用 KiB, MiB
+                human_size = humanize.naturalsize(size, binary=True)  # binary=True 使用 KiB, MiB
                 meta_info = f" ({human_size})"
             except OSError:
-                 meta_info = " (Unknown size)"
+                meta_info = " (Unknown size)"
 
         # 构建 Text 对象以便利用 rich 的格式化能力 (虽然最后会转纯文本，但 rich 可以处理 emoji 等)
         # 这里我们简单返回字符串供 Tree 使用，让 Tree 处理结构
 
         if path.is_dir():
-             return f"📂 {name}{meta_info}"
+            return f"📂 {name}{meta_info}"
         else:
-             return f"📄 {name}{meta_info}"
+            return f"📄 {name}{meta_info}"
 
     def _render_tree_to_string(self, tree: Tree) -> str:
         """
         使用 Console 将 rich Tree 渲染为字符串。
         """
-        console = Console(file=io.StringIO(), width=100, force_terminal=False, color_system=None)
+        string_io = io.StringIO()
+        console = Console(file=string_io, width=100, force_terminal=False, color_system=None)
         console.print(tree)
-        output = console.file.getvalue()
+        output = string_io.getvalue()
 
         # 封装在 Markdown 代码块中
         markdown_output = f"```\n{output}```"

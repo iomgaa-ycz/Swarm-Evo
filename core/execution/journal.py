@@ -123,7 +123,10 @@ class Journal:
                 break
             trace.append(node)
             # Follow primary lineage
-            current_id = node.parent_id
+            next_id = node.parent_id
+            if next_id is None:
+                break
+            current_id = next_id
         return list(reversed(trace))
 
     def get_ancestors(self, node_id: str) -> list[Node]:

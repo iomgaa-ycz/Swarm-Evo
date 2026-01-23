@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import faiss
+import numpy as np
 
 from core.evolution.embedding_manager import CodeEmbeddingManager
 from core.evolution.gene_registry import (
@@ -63,21 +64,19 @@ embedding_manager = CodeEmbeddingManager()
 # Recent selected buffer
 # =========================
 
-RECENT_SELECTED: dict[str, deque[str]] = {
-    locus: deque(maxlen=RECENT_WINDOW)
-    for locus in ALL_LOCI
-}
+RECENT_SELECTED: dict[str, deque[str]] = {locus: deque(maxlen=RECENT_WINDOW) for locus in ALL_LOCI}
 
 # =========================
 # Data structure
 # =========================
 
+
 @dataclass
 class GeneItem:
     locus: str
     gene_id: str
-    content: str          # normalized (for embedding / similarity)
-    raw_content: str      # original code (for merge)
+    content: str  # normalized (for embedding / similarity)
+    raw_content: str  # original code (for merge)
     source_node_id: str
     gene_pheromone: float
     node_pheromone: float
@@ -89,6 +88,7 @@ class GeneItem:
 # =========================
 # Public API
 # =========================
+
 
 def select_gene_plan(
     journal: Journal,
@@ -104,11 +104,7 @@ def select_gene_plan(
     pools = build_decision_gene_pools(journal, gene_registry)
 
     for locus, items in pools.items():
-        log_msg(
-            "INFO",
-            f"[POOL] {locus}: size={len(items)} "
-            f"genes={[i.gene_id[:6] for i in items]}"
-        )
+        log_msg("INFO", f"[POOL] {locus}: size={len(items)} genes={[i.gene_id[:6] for i in items]}")
 
     winners: dict[str, GeneItem] = {}
     for locus in ALL_LOCI:
@@ -143,6 +139,7 @@ def select_gene_plan(
 # Gene pool construction
 # =========================
 
+
 def build_decision_gene_pools(
     journal: Journal,
     gene_registry: GeneRegistry,
@@ -163,9 +160,7 @@ def build_decision_gene_pools(
                 continue
 
             gene_id = compute_gene_id(normalized)
-            gene_pheromone = gene_registry.get_gene_pheromone(
-                locus, gene_id, DEFAULT_INIT_PHEROMONE
-            )
+            gene_pheromone = gene_registry.get_gene_pheromone(locus, gene_id, DEFAULT_INIT_PHEROMONE)
 
             node_pheromone = 0.0
             if node.metadata:
@@ -179,7 +174,7 @@ def build_decision_gene_pools(
                 source_node_id=node.id,
                 gene_pheromone=float(gene_pheromone),
                 node_pheromone=float(node_pheromone),
-                source_score=float(node.score),
+                source_score=float(node.score if node.score is not None else 0.0),
                 created_step=int(node.step),
             )
             item.quality = _compute_quality(item)
@@ -194,6 +189,7 @@ def build_decision_gene_pools(
 # =========================
 # Core selection logic
 # =========================
+
 
 def _select_locus_winner(items: list[GeneItem]) -> GeneItem:
     """
@@ -235,8 +231,9 @@ def _select_locus_winner(items: list[GeneItem]) -> GeneItem:
         index = faiss.IndexFlatIP(recent_vecs.shape[1])
         index.add(recent_vecs)
 
-        sims, _ = index.search(candidate_vecs, 1)
-        sims = sims.reshape(-1)
+        # search returns (distances, labels)
+        sims_raw, _ = index.search(candidate_vecs, 1)
+        sims = np.array(sims_raw).reshape(-1)
         max_sims = [float((s + 1.0) / 2.0) for s in sims]
 
     # -----------------------------
@@ -250,8 +247,8 @@ def _select_locus_winner(items: list[GeneItem]) -> GeneItem:
 
     scored.sort(
         key=lambda x: (
-            -x[0],                # final score
-            -x[1],                # diversity
+            -x[0],  # final score
+            -x[1],  # diversity
             -x[2].quality,
             -x[2].node_pheromone,
             -x[2].source_score,
@@ -270,7 +267,7 @@ def _select_locus_winner(items: list[GeneItem]) -> GeneItem:
         f"quality={winner.quality:.4f} "
         f"diversity={scored[0][1]:.4f} "
         f"final={scored[0][0]:.4f} "
-        f"node={winner.source_node_id[:6]}"
+        f"node={winner.source_node_id[:6]}",
     )
 
     return winner
@@ -279,6 +276,7 @@ def _select_locus_winner(items: list[GeneItem]) -> GeneItem:
 # =========================
 # Utilities
 # =========================
+
 
 def _is_valid_node(node: Node) -> bool:
     if node.score is None or node.is_buggy:
@@ -304,8 +302,4 @@ def _is_better_item(candidate: GeneItem, incumbent: GeneItem) -> bool:
 
 
 def _compute_quality(item: GeneItem) -> float:
-    return (
-        QUALITY_BLEND * item.gene_pheromone
-        + (1.0 - QUALITY_BLEND) * item.node_pheromone
-    )
-
+    return QUALITY_BLEND * item.gene_pheromone + (1.0 - QUALITY_BLEND) * item.node_pheromone

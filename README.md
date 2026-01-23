@@ -47,7 +47,7 @@ pip install -r requirements.txt
 
 ## 拉取数据
 pip install dvc
-dcv pull 
+dcv pull
 
 # 安装agent环境供Agent系统使用
 conda create -n agent python=3.10 -y
@@ -128,5 +128,3 @@ API_KEY="your api key"  API_BASE="https://open.bigmodel.cn/api/coding/paas/v4"  
 ```
 
 注意如果是运行`main.py`，需要把`.env`文件中的`MLE_BENCH_WORKSPACE_DIR`设置为`./workspace`目录,如果是运行mle-bench需要把`.env`文件中的`MLE_BENCH_WORKSPACE_DIR`设置为`../`目录
-
-

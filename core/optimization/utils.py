@@ -38,14 +38,17 @@ class LLMResponseParser:
                 json_start = response_content.find("```json") + 7
                 json_end = response_content.find("```", json_start)
                 json_str = response_content[json_start:json_end].strip()
-                return json.loads(json_str)
+                result = json.loads(json_str)
+                return result if isinstance(result, dict) else None
             elif "```" in response_content:
                 json_start = response_content.find("```") + 3
                 json_end = response_content.find("```", json_start)
                 json_str = response_content[json_start:json_end].strip()
-                return json.loads(json_str)
+                result = json.loads(json_str)
+                return result if isinstance(result, dict) else None
             else:
-                return json.loads(response_content)
+                result = json.loads(response_content)
+                return result if isinstance(result, dict) else None
         except (json.JSONDecodeError, ValueError):
             return None
 
@@ -60,21 +63,14 @@ class LLMResponseParser:
         返回:
             字符串格式的响应内容
         """
-        return (
-            response.content if isinstance(response.content, str)
-            else str(response.content)
-        )
+        return response.content if isinstance(response.content, str) else str(response.content)
 
 
 class MessageBuilder:
     """LLM消息构建器"""
 
     @staticmethod
-    def build_llm_messages(
-        template_content: str,
-        template_vars: dict[str, Any],
-        human_message: str
-    ) -> list:
+    def build_llm_messages(template_content: str, template_vars: dict[str, Any], human_message: str) -> list:
         """
         构建标准的LLM消息
 
@@ -89,10 +85,7 @@ class MessageBuilder:
         template = Template(template_content)
         system_message = template.render(**template_vars)
 
-        return [
-            SystemMessage(content=system_message),
-            HumanMessage(content=human_message)
-        ]
+        return [SystemMessage(content=system_message), HumanMessage(content=human_message)]
 
 
 class FileSaver:
@@ -100,10 +93,7 @@ class FileSaver:
 
     @staticmethod
     def save_result_to_json(
-        result: dict[str, Any],
-        filename: str,
-        storage_dir: str = "workspace/logs",
-        result_type: str = "result"
+        result: dict[str, Any], filename: str, storage_dir: str = "workspace/logs", result_type: str = "result"
     ) -> bool:
         """
         保存结果到JSON文件
@@ -123,7 +113,7 @@ class FileSaver:
         filepath = storage_path / filename
 
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
             log_msg("INFO", f"{result_type}结果已保存到: {filepath}")
             return True

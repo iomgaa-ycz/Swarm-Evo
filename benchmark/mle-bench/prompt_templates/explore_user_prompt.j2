@@ -77,7 +77,7 @@ On failure, tools return ErrorInfo(...).
 # Execution Environment
 - **Time**: {{ elapsed }} elapsed, {{ remaining }} remaining (Total: {{ total_time }}).
 - **Iteration**: {{ iteration }} / {{ total_iterations }}
-- **System Resource**: 
+- **System Resource**:
 {{ device_info }}
 - **Conda Packages**:
 {{ conda_packages }}
@@ -114,7 +114,7 @@ IMPORTANT: You must save your code to '{{ workspace_root }}/solution.py' in the 
 Please draft an initial solution for the task goal.
 
 **CRITICAL: Strict Structure Requirement**
-You MUST implement the code following the EXACT structure below. 
+You MUST implement the code following the EXACT structure below.
 The system uses the `[SECTION: ...]` tags to parse your code, so DO NOT modify the tags or function signatures.
 If device has GPU, you MUST use it. You MUST explicitly check for CUDA availability.
 

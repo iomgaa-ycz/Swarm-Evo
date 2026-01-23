@@ -41,9 +41,7 @@ class GeneRegistry:
     """Tracks pheromone statistics for individual genes per locus."""
 
     def __init__(self) -> None:
-        self._registry: dict[str, dict[str, dict[str, Any]]] = {
-            locus: {} for locus in _LOCUS_NAMES
-        }
+        self._registry: dict[str, dict[str, dict[str, Any]]] = {locus: {} for locus in _LOCUS_NAMES}
 
     def update_from_reviewed_node(self, node: Node) -> None:
         """Update registry using a reviewed node's pheromone."""
@@ -60,8 +58,7 @@ class GeneRegistry:
             # 临时验证点 A：GeneRegistry 是否真的读到 gene
             log_msg(
                 "DEBUG",
-                f"[GENE-REGISTRY] node={node.id[:6]} locus={locus} "
-                f"len={len(gene_content) if gene_content else 0}"
+                f"[GENE-REGISTRY] node={node.id[:6]} locus={locus} len={len(gene_content) if gene_content else 0}",
             )
 
             if not gene_content:
@@ -88,7 +85,7 @@ class GeneRegistry:
             entry["content"] = gene_content
             entry["source_node_id"] = node.id
 
-#gene_pool全集合构建
+    # gene_pool全集合构建
     def get_gene_pheromone(self, locus: str, gene_id: str, default_init: float = 0.1) -> float:
         locus_entries = self._registry.get(locus)
         if not locus_entries:

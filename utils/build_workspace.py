@@ -11,11 +11,7 @@ from utils.logger_system import log_msg
 from .config import Config
 
 
-def build_workspace(
-    config: Config,
-    workspace_dir: str | None = None,
-    competition: str | None = None
-) -> str:
+def build_workspace(config: Config, workspace_dir: str | None = None, competition: str | None = None) -> str:
     """
     构建完整的 MLE-bench workspace 目录结构
 
@@ -40,16 +36,22 @@ def build_workspace(
         └── /code/                    # 代码输出(读写)
     """
     # 第一阶段：从 Config 对象获取配置
-    workspace_dir = workspace_dir or config.mle_bench_workspace_dir
-    competition = competition or config.mle_bench_competition
-    workspace_path = Path(workspace_dir).expanduser()
+    workspace_dir_final = workspace_dir or config.mle_bench_workspace_dir
+    competition_final = competition or config.mle_bench_competition
+
+    if workspace_dir_final is None:
+        raise ValueError("workspace_dir must be provided either via argument or config")
+    if competition_final is None:
+        raise ValueError("competition must be provided either via argument or config")
+
+    workspace_path = Path(workspace_dir_final).expanduser()
 
     # 第二阶段：定位竞赛数据目录（兼容不同数据组织形式）
     public_data_dir = Path("dataset/public").expanduser()
     candidate_data_dirs = [
-        public_data_dir / competition / 'prepared' / 'public',
-        public_data_dir / competition,
-        public_data_dir
+        public_data_dir / competition_final / "prepared" / "public",
+        public_data_dir / competition_final,
+        public_data_dir,
     ]
     competition_data_dir = None
     for candidate in candidate_data_dirs:
@@ -57,7 +59,9 @@ def build_workspace(
             competition_data_dir = candidate
             break
     if competition_data_dir is None:
-        log_msg("ERROR", f"无法在以下目录中找到竞赛数据: {[str(path) for path in candidate_data_dirs]}")
+        msg = f"无法在以下目录中找到竞赛数据: {[str(path) for path in candidate_data_dirs]}"
+        log_msg("ERROR", msg)
+        raise FileNotFoundError(msg)
 
     # 第三阶段：验证源目录和文件存在性
     competition_path = competition_data_dir
@@ -95,7 +99,7 @@ def build_workspace(
                 shutil.copytree(item, target_path)
 
     # 第七阶段：读取并返回 description.md 内容
-    with open(description_source, encoding='utf-8') as f:
+    with open(description_source, encoding="utf-8") as f:
         description_content = f.read()
 
     return description_content

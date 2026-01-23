@@ -22,6 +22,7 @@ from utils.logger_system import log_msg
 @dataclass
 class GenerationResult:
     """生成结果"""
+
     success: bool  # 是否成功生成
     new_prompt: str  # 新生成的prompt内容
     version: str  # 版本号
@@ -40,12 +41,7 @@ class PromptGenerator:
     根据反思器的建议生成新版本的prompt
     """
 
-    def __init__(
-        self,
-        llm: BaseChatModel,
-        prompt_manager: PromptManager,
-        version_manager: AgentVersionManager
-    ):
+    def __init__(self, llm: BaseChatModel, prompt_manager: PromptManager, version_manager: AgentVersionManager):
         """
         初始化生成器
 
@@ -64,7 +60,7 @@ class PromptGenerator:
         prompt_type: str,
         current_prompt: str,
         reflection: dict[str, Any],
-        additional_context: dict[str, Any] | None = None
+        additional_context: dict[str, Any] | None = None,
     ) -> GenerationResult:
         """
         根据反思结果生成新版本的prompt
@@ -87,7 +83,7 @@ class PromptGenerator:
             prompt_type=prompt_type,
             current_prompt=current_prompt,
             reflection=reflection,
-            additional_context=additional_context or {}
+            additional_context=additional_context or {},
         )
 
         try:
@@ -112,7 +108,7 @@ class PromptGenerator:
                 reasoning="",
                 original_prompt=current_prompt,
                 suggestions_used=[s.get("proposal", str(s)) for s in suggestions],
-                error=str(e)
+                error=str(e),
             )
 
     def _generate_version(self, agent_name: str, prompt_type: str) -> str:
@@ -129,10 +125,7 @@ class PromptGenerator:
         # 获取现有版本数量
         agent_record = self.version_manager.get_agent_record(agent_name)
         if agent_record:
-            version_count = len([
-                v for v in agent_record.prompt_versions
-                if v.prompt_type == prompt_type
-            ])
+            version_count = len([v for v in agent_record.prompt_versions if v.prompt_type == prompt_type])
         else:
             version_count = 0
 
@@ -142,11 +135,7 @@ class PromptGenerator:
         return f"{prompt_type}_v{version_count}_{timestamp}"
 
     def _build_generation_messages(
-        self,
-        prompt_type: str,
-        current_prompt: str,
-        reflection: dict[str, Any],
-        additional_context: dict[str, Any]
+        self, prompt_type: str, current_prompt: str, reflection: dict[str, Any], additional_context: dict[str, Any]
     ) -> list:
         """
         构建用于LLM生成的消息
@@ -159,21 +148,17 @@ class PromptGenerator:
             "prompt_type": prompt_type,
             "current_prompt": current_prompt,
             "reflection": reflection,
-            "additional_context": additional_context
+            "additional_context": additional_context,
         }
 
         return MessageBuilder.build_llm_messages(
             template_content=template_content,
             template_vars=template_vars,
-            human_message="请根据以上反思分析，生成改进后的prompt版本。"
+            human_message="请根据以上反思分析，生成改进后的prompt版本。",
         )
 
     def _parse_generation_response(
-        self,
-        response_content: str,
-        original_prompt: str,
-        version: str,
-        reflection: dict[str, Any]
+        self, response_content: str, original_prompt: str, version: str, reflection: dict[str, Any]
     ) -> GenerationResult:
         """
         解析LLM的生成响应
@@ -190,7 +175,7 @@ class PromptGenerator:
                 changes_made=data.get("changes_made", []),
                 reasoning=data.get("reasoning", ""),
                 original_prompt=original_prompt,
-                suggestions_used=[s.get("proposal", str(s)) for s in suggestions]
+                suggestions_used=[s.get("proposal", str(s)) for s in suggestions],
             )
         else:
             # 如果JSON解析失败，尝试提取文本内容
@@ -202,14 +187,14 @@ class PromptGenerator:
                 reasoning="根据反思分析生成新版本",
                 original_prompt=original_prompt,
                 suggestions_used=[s.get("proposal", str(s)) for s in suggestions],
-                parse_error="JSON解析失败"
+                parse_error="JSON解析失败",
             )
 
     async def apply_new_prompt(
         self,
         prompt_type: str,
         new_prompt: str,
-        version: str  # 保留参数以保持接口兼容性
+        version: str,  # 保留参数以保持接口兼容性
     ) -> bool:
         """
         应用新生成的prompt，更新到prompt_manager
@@ -224,9 +209,7 @@ class PromptGenerator:
         """
         try:
             template_name = f"{prompt_type}_user_prompt.j2"
-            self.prompt_manager.set_template(
-                template_name, new_prompt
-            )
+            self.prompt_manager.set_template(template_name, new_prompt)
             return True
 
         except Exception as e:

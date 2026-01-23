@@ -77,6 +77,7 @@ def normalize_json_output(text: str) -> str:
 
     return cleaned
 
+
 def parse_json_output(text: str, suppress_error_log: bool = False) -> dict[str, Any]:
     """
     Robustly parse JSON output from LLM.
@@ -93,7 +94,10 @@ def parse_json_output(text: str, suppress_error_log: bool = False) -> dict[str, 
     """
     normalized = normalize_json_output(text)
     try:
-        return json.loads(normalized)
+        result = json.loads(normalized)
+        if not isinstance(result, dict):
+            raise ValueError(f"Expected JSON object, got {type(result)}")
+        return result
     except json.JSONDecodeError as e:
         if not suppress_error_log:
             with open("error.txt", "w") as f:

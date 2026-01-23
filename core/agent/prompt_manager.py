@@ -225,7 +225,7 @@ class PromptManager:
         log_msg("INFO", f"Device info: {device_info}")
 
         # 准备目录树信息
-        file_previews = {}
+        file_previews: dict[str, str] = {}
         try:
             tree_gen = DirectoryTreeGenerator(workspace_root, ignore_patterns=[".git", "__pycache__", "agent"])
             directory_tree, file_previews = tree_gen.generate()
@@ -277,7 +277,8 @@ class PromptManager:
         建议使用 build_system_message() 代替。
         """
         template = self._get_template("system_prompt.j2")
-        return template.render()
+        result = template.render()
+        return str(result)
 
     def build_user_prompt(self, context: PromptContext, history: str) -> str:
         """
@@ -299,7 +300,8 @@ class PromptManager:
         # 兼容旧接口：手动添加 history_block
         render_vars["history_block"] = self._build_history_block(history)
 
-        return template.render(**render_vars)
+        result = template.render(**render_vars)
+        return str(result)
 
     def _build_history_block(self, history: str) -> str:
         """生成历史记录区块，若无历史则返回空字符串。"""

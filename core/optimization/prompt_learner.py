@@ -123,7 +123,7 @@ class PromptLearner:
             return []
 
         # 提取每个Agent的当前prompt版本的综合评分
-        agent_scores = []
+        agent_scores: list[dict[str, Any]] = []
         for agent_name in eligible_agents:
             # 获取当前prompt版本
             current_prompt = self.version_manager.get_current_prompt(agent_name, prompt_type)
@@ -131,11 +131,11 @@ class PromptLearner:
                 continue
 
             # 使用综合评分
-            score = current_prompt.composite_score
+            score = float(current_prompt.composite_score)
 
             agent_scores.append(
                 {
-                    "agent_name": agent_name,
+                    "agent_name": str(agent_name),
                     "score": score,
                     "prompt_id": current_prompt.version_id,
                     "prompt_version": current_prompt,
@@ -144,23 +144,25 @@ class PromptLearner:
             )
 
         # 生成所有可能的学习候选对（低分 -> 高分）
-        candidates = []
+        candidates: list[LearningCandidate] = []
 
         for student in agent_scores:
             for teacher in agent_scores:
                 if student["agent_name"] == teacher["agent_name"]:
                     continue
 
-                score_gap = teacher["score"] - student["score"]
+                student_score = float(student["score"])
+                teacher_score = float(teacher["score"])
+                score_gap = teacher_score - student_score
 
                 # 只有分数差距超过阈值才考虑学习
                 if score_gap >= self.learning_threshold:
                     candidate = LearningCandidate(
-                        student_agent=student["agent_name"],
-                        teacher_agent=teacher["agent_name"],
+                        student_agent=str(student["agent_name"]),
+                        teacher_agent=str(teacher["agent_name"]),
                         prompt_type=prompt_type,
-                        student_score=student["score"],
-                        teacher_score=teacher["score"],
+                        student_score=student_score,
+                        teacher_score=teacher_score,
                         score_gap=score_gap,
                         student_prompt_id=student["prompt_id"],
                         teacher_prompt_id=teacher["prompt_id"],
@@ -288,7 +290,7 @@ class PromptLearner:
             "teacher_score": candidate.teacher_score,
             "score_gap": candidate.score_gap,
             "student_prompt": candidate.student_version.prompt_content if candidate.student_version else "",
-            "teacher_prompt": candidate.teacher_version.prompt_content,
+            "teacher_prompt": candidate.teacher_version.prompt_content if candidate.teacher_version else "",
             "student_reflection": candidate.student_version.reflection if candidate.student_version else None,
             "teacher_reflection": candidate.teacher_version.reflection if candidate.teacher_version else None,
             "student_metrics": {
@@ -398,7 +400,7 @@ class PromptLearner:
         successful_learning = len([r for r in self.learning_history if r.success])
 
         # 按Agent统计
-        agent_learning_counts = {}
+        agent_learning_counts: dict[str, int] = {}
         for record in self.learning_history:
             agent = record.student_agent
             agent_learning_counts[agent] = agent_learning_counts.get(agent, 0) + 1

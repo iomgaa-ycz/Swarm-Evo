@@ -18,10 +18,11 @@ from utils.logger_system import log_msg
 @dataclass
 class NodeMetadata:
     """单个Node的Review结果"""
-    score: float | None                              # Review分数
-    has_submission: bool                                # 是否有提交
-    timestamp: str                                      # Review时间 (ISO格式)
-    node_id: str                                        # 关联的Node ID（被review的节点）
+
+    score: float | None  # Review分数
+    has_submission: bool  # 是否有提交
+    timestamp: str  # Review时间 (ISO格式)
+    node_id: str  # 关联的Node ID（被review的节点）
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
@@ -31,110 +32,103 @@ class NodeMetadata:
 @dataclass
 class TaskReviewRecord:
     """单个explore/merge任务的Review记录"""
-    num: int                                            # Review序号
-    task_score: float                                   # 任务分数 = node_metadata的平均值
-    has_submission: bool                                # 是否有提交 = node_metadata中任一为true则为true
-    task_id: str                                        # 关联的任务ID（explore/merge任务）
+
+    num: int  # Review序号
+    task_score: float  # 任务分数 = node_metadata的平均值
+    has_submission: bool  # 是否有提交 = node_metadata中任一为true则为true
+    task_id: str  # 关联的任务ID（explore/merge任务）
     node_metadata: list[NodeMetadata] = field(default_factory=list)  # 该任务的所有node的review结果
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         # 处理NodeMetadata列表
-        data['node_metadata'] = [
-            nm.to_dict() if hasattr(nm, 'to_dict') else nm for nm in self.node_metadata
-        ]
+        data["node_metadata"] = [nm.to_dict() if hasattr(nm, "to_dict") else nm for nm in self.node_metadata]
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'TaskReviewRecord':
+    def from_dict(cls, data: dict[str, Any]) -> "TaskReviewRecord":
         """从字典创建实例"""
         # 处理node_metadata字段
-        node_metadata_data = data.get('node_metadata', [])
-        node_metadata = [
-            NodeMetadata(**nm) if isinstance(nm, dict) else nm
-            for nm in node_metadata_data
-        ]
-        data['node_metadata'] = node_metadata
+        node_metadata_data = data.get("node_metadata", [])
+        node_metadata = [NodeMetadata(**nm) if isinstance(nm, dict) else nm for nm in node_metadata_data]
+        data["node_metadata"] = node_metadata
         return cls(**data)
 
 
 @dataclass
 class PromptVersionRecord:
     """Prompt版本记录"""
-    version_id: str                                      # 版本唯一标识
-    prompt_type: str                                     # prompt类型 (explore/merge)
-    prompt_content: str                                  # prompt内容
-    created_at: str                                      # 创建时间 (ISO格式)
-    source: str                                          # 版本来源 (initial/generated/manual/learned)
+
+    version_id: str  # 版本唯一标识
+    prompt_type: str  # prompt类型 (explore/merge)
+    prompt_content: str  # prompt内容
+    created_at: str  # 创建时间 (ISO格式)
+    source: str  # 版本来源 (initial/generated/manual/learned)
 
     # 使用统计
-    used_count: int = 0                                  # 该版本使用次数
+    used_count: int = 0  # 该版本使用次数
 
     # Review记录列表（按explore/merge任务分组）
     review_records: list[TaskReviewRecord] = field(default_factory=list)  # 该版本的所有review记录
 
     # 综合评分
-    composite_score: float = 0.0                        # 综合评分 = 加权(平均生成率, 平均准确率)
-    avg_generation_rate: float = 0.0                    # 平均生成率
-    avg_accuracy: float = 0.0                           # 平均准确率
+    composite_score: float = 0.0  # 综合评分 = 加权(平均生成率, 平均准确率)
+    avg_generation_rate: float = 0.0  # 平均生成率
+    avg_accuracy: float = 0.0  # 平均准确率
 
     # 反思相关信息
-    reflection: dict[str, Any] | None = None          # 完整的反思结果（包含diagnosis, suggestions等）
-    previous_version_id: str | None = None            # 前一个版本ID
+    reflection: dict[str, Any] | None = None  # 完整的反思结果（包含diagnosis, suggestions等）
+    previous_version_id: str | None = None  # 前一个版本ID
 
     # 交叉来源信息（用于学习器）
-    crossover_source: dict[str, str] | None = None    # 交叉来源 {"agent": "agent_1", "version_id": "explore_v2"}
+    crossover_source: dict[str, str] | None = None  # 交叉来源 {"agent": "agent_1", "version_id": "explore_v2"}
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         # 处理TaskReviewRecord列表
-        data['review_records'] = [
-            r.to_dict() if hasattr(r, 'to_dict') else r for r in self.review_records
-        ]
+        data["review_records"] = [r.to_dict() if hasattr(r, "to_dict") else r for r in self.review_records]
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'PromptVersionRecord':
+    def from_dict(cls, data: dict[str, Any]) -> "PromptVersionRecord":
         """从字典创建实例"""
         # 处理review_records字段
-        review_records_data = data.get('review_records', [])
-        review_records = [
-            TaskReviewRecord.from_dict(r) if isinstance(r, dict) else r
-            for r in review_records_data
-        ]
-        data['review_records'] = review_records
+        review_records_data = data.get("review_records", [])
+        review_records = [TaskReviewRecord.from_dict(r) if isinstance(r, dict) else r for r in review_records_data]
+        data["review_records"] = review_records
         return cls(**data)
 
 
 @dataclass
 class AgentEvolutionRecord:
     """Agent进化记录"""
-    agent_name: str                                      # Agent名称
-    created_at: str                                      # 记录创建时间
-    last_updated: str                                    # 最后更新时间
+
+    agent_name: str  # Agent名称
+    created_at: str  # 记录创建时间
+    last_updated: str  # 最后更新时间
 
     # Prompt版本历史
     prompt_versions: list[PromptVersionRecord] = field(default_factory=list)  # 版本历史列表
 
     # 当前状态
-    current_explore_version: str | None = None        # 当前explore版本ID
-    current_merge_version: str | None = None          # 当前merge版本ID
+    current_explore_version: str | None = None  # 当前explore版本ID
+    current_merge_version: str | None = None  # 当前merge版本ID
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         data = asdict(self)
         # 处理嵌套的dataclass对象
-        data['prompt_versions'] = [v.to_dict() for v in self.prompt_versions]
+        data["prompt_versions"] = [v.to_dict() for v in self.prompt_versions]
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> 'AgentEvolutionRecord':
+    def from_dict(cls, data: dict[str, Any]) -> "AgentEvolutionRecord":
         """从字典创建实例"""
         # 处理嵌套的dataclass对象
-        prompt_versions = [PromptVersionRecord.from_dict(v) for v in data.get('prompt_versions', [])]
-        data['prompt_versions'] = prompt_versions
+        prompt_versions = [PromptVersionRecord.from_dict(v) for v in data.get("prompt_versions", [])]
+        data["prompt_versions"] = prompt_versions
         return cls(**data)
 
 
@@ -153,11 +147,11 @@ class AgentVersionManager:
     TEMPLATE_MAP = {
         "explore": "explore_user_prompt.j2",
         "merge": "merge_user_prompt.j2",
-        "review": "evaluate_user_prompt.j2"
+        "review": "evaluate_user_prompt.j2",
     }
-    ACCURACY_WEIGHT = 0.6                                # 准确率权重
-    GENERATION_RATE_WEIGHT = 0.4                         # 生成率权重
-    SLOW_IO_THRESHOLD = 0.1                              # 慢IO阈值（秒）
+    ACCURACY_WEIGHT = 0.6  # 准确率权重
+    GENERATION_RATE_WEIGHT = 0.4  # 生成率权重
+    SLOW_IO_THRESHOLD = 0.1  # 慢IO阈值（秒）
 
     def __init__(self, storage_dir: str = "workspace/agent_evolution", prompt_manager=None):
         """
@@ -187,7 +181,7 @@ class AgentVersionManager:
         try:
             for record_file in self.storage_dir.glob("agent_*.json"):
                 try:
-                    with open(record_file, encoding='utf-8') as f:
+                    with open(record_file, encoding="utf-8") as f:
                         data = json.load(f)
                     record = AgentEvolutionRecord.from_dict(data)
                     self.agent_records[record.agent_name] = record
@@ -211,11 +205,7 @@ class AgentVersionManager:
                 return self.agent_records[agent_name]
 
             now = datetime.now().isoformat()
-            record = AgentEvolutionRecord(
-                agent_name=agent_name,
-                created_at=now,
-                last_updated=now
-            )
+            record = AgentEvolutionRecord(agent_name=agent_name, created_at=now, last_updated=now)
 
             self.agent_records[agent_name] = record
             self._save_agent_record(agent_name)
@@ -230,7 +220,7 @@ class AgentVersionManager:
         prompt_content: str,
         source: str = "generated",
         previous_version_id: str | None = None,
-        crossover_source: dict[str, str] | None = None
+        crossover_source: dict[str, str] | None = None,
     ) -> PromptVersionRecord:
         """
         记录一个新的prompt版本
@@ -259,7 +249,7 @@ class AgentVersionManager:
                 created_at=datetime.now().isoformat(),
                 source=source,
                 previous_version_id=previous_version_id,
-                crossover_source=crossover_source
+                crossover_source=crossover_source,
             )
 
             # 添加到版本历史
@@ -312,12 +302,7 @@ class AgentVersionManager:
 
             return False
 
-    async def record_task_execution(
-        self,
-        agent_name: str,
-        prompt_type: str,
-        task_id: str
-    ) -> bool:
+    async def record_task_execution(self, agent_name: str, prompt_type: str, task_id: str) -> bool:
         """
         记录任务执行（用于没有生成节点的情况）
 
@@ -356,11 +341,7 @@ class AgentVersionManager:
                     # 创建空的TaskReviewRecord
                     num = len(version.review_records) + 1
                     task_record = TaskReviewRecord(
-                        num=num,
-                        task_score=0.0,
-                        has_submission=False,
-                        task_id=task_id,
-                        node_metadata=[]
+                        num=num, task_score=0.0, has_submission=False, task_id=task_id, node_metadata=[]
                     )
                     version.review_records.append(task_record)
 
@@ -383,7 +364,7 @@ class AgentVersionManager:
         node_id: str,
         score: float | None,
         has_submission: bool,
-        version_id: str | None = None
+        version_id: str | None = None,
     ) -> bool:
         """
         记录review结果到对应的prompt版本
@@ -429,12 +410,7 @@ class AgentVersionManager:
                     # 如果没有该task_id的记录，创建新的TaskReviewRecord
                     if not task_record:
                         num = len(version.review_records) + 1
-                        task_record = TaskReviewRecord(
-                            num=num,
-                            task_score=0.0,
-                            has_submission=False,
-                            task_id=task_id
-                        )
+                        task_record = TaskReviewRecord(num=num, task_score=0.0, has_submission=False, task_id=task_id)
                         version.review_records.append(task_record)
 
                     # 创建NodeMetadata并添加到任务记录
@@ -442,7 +418,7 @@ class AgentVersionManager:
                         score=score,
                         has_submission=has_submission,
                         timestamp=datetime.now().isoformat(),
-                        node_id=node_id
+                        node_id=node_id,
                     )
                     task_record.node_metadata.append(node_metadata)
 
@@ -479,7 +455,9 @@ class AgentVersionManager:
         version.avg_generation_rate = submission_count / version.used_count
 
         # 计算平均准确率（基于任务级别的task_score）
-        valid_task_scores = [task_record.task_score for task_record in version.review_records if task_record.task_score is not None]
+        valid_task_scores = [
+            task_record.task_score for task_record in version.review_records if task_record.task_score is not None
+        ]
         if valid_task_scores:
             version.avg_accuracy = sum(valid_task_scores) / len(valid_task_scores)
         else:
@@ -487,8 +465,7 @@ class AgentVersionManager:
 
         # 计算综合评分
         version.composite_score = (
-            self.ACCURACY_WEIGHT * version.avg_accuracy +
-            self.GENERATION_RATE_WEIGHT * version.avg_generation_rate
+            self.ACCURACY_WEIGHT * version.avg_accuracy + self.GENERATION_RATE_WEIGHT * version.avg_generation_rate
         )
 
     def _update_task_record_metrics(self, task_record: TaskReviewRecord) -> None:
@@ -517,12 +494,7 @@ class AgentVersionManager:
         # 计算has_submission（任一为true则为true）
         task_record.has_submission = any(nm.has_submission for nm in task_record.node_metadata)
 
-    async def update_version_reflection(
-        self,
-        agent_name: str,
-        version_id: str,
-        reflection: dict[str, Any]
-    ) -> bool:
+    async def update_version_reflection(self, agent_name: str, version_id: str, reflection: dict[str, Any]) -> bool:
         """
         更新版本的reflection（完整反思结果）
 
@@ -665,7 +637,7 @@ class AgentVersionManager:
             prompt_content=initial_prompt_content,
             created_at=datetime.now().isoformat(),
             source="initial",
-            used_count=0
+            used_count=0,
         )
         agent_record.prompt_versions.append(current_version)
 
@@ -690,7 +662,7 @@ class AgentVersionManager:
 
         try:
             start = time.time()
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(record.to_dict(), f, ensure_ascii=False, indent=2)
             elapsed = time.time() - start
             if elapsed > self.SLOW_IO_THRESHOLD:

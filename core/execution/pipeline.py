@@ -38,7 +38,7 @@ class Pipeline:
             for _ in range(self.config.init_task_num):
                 self._add_task_internal(self._create_task("explore"))
 
-    def _create_task(self, task_type: str, payload: dict[str, Any] = None) -> Task:
+    def _create_task(self, task_type: str, payload: dict[str, Any] | None = None) -> Task:
         """
         创建新任务实例
         """
@@ -155,7 +155,8 @@ class Pipeline:
         logits = [p / temperature for p in pheromones]
         max_logit = max(logits)
         weights = [math.exp(logit - max_logit) for logit in logits]
-        parent_node = random.choices(valid_nodes, weights=weights, k=1)[0]
+        sampled_nodes = random.choices(valid_nodes, weights=weights, k=1)
+        parent_node = sampled_nodes[0]
 
         ensure_node_stats(parent_node)
         parent_node.metadata["usage_count"] += 1
@@ -172,7 +173,12 @@ class Pipeline:
         with self.lock:
             self.tasks.sort(key=lambda t: t["created_at"])
 
-    def complete_task(self, task_id: str, result_nodes: list[Node] = None, update_data: dict[str, Any] | None = None):
+    def complete_task(
+        self,
+        task_id: str,
+        result_nodes: list[Node] | None = None,
+        update_data: dict[str, Any] | None = None,
+    ):
         """
         完成一个任务，并根据特定规则添加后续任务。
 
@@ -220,41 +226,45 @@ class Pipeline:
                 if update_data:
                     target_id = task["payload"].get("target_node_id")
                     if target_id:
-                        node = self.journal.get_node(target_id)
-                        if node:
-                            node.score = update_data.get("score")
-                            node.summary = update_data.get("summary", "")
-                            node.is_buggy = update_data.get("is_bug", False)
-                            if node.metadata is None:
-                                node.metadata = {}
-                            node.metadata["review_success"] = update_data.get("agent_success", False)
-                            ensure_node_stats(node)
-                            success = node.score is not None and not node.is_buggy
-                            if success:
-                                if self.journal.score_min is None or node.score < self.journal.score_min:
-                                    self.journal.score_min = node.score
-                                if self.journal.score_max is None or node.score > self.journal.score_max:
-                                    self.journal.score_max = node.score
+                        reviewed_node = self.journal.get_node(target_id)
+                        if reviewed_node is not None:
+                            reviewed_node.score = update_data.get("score")
+                            reviewed_node.summary = update_data.get("summary", "")
+                            reviewed_node.is_buggy = update_data.get("is_bug", False)
+                            if reviewed_node.metadata is None:
+                                reviewed_node.metadata = {}
+                            reviewed_node.metadata["review_success"] = update_data.get("agent_success", False)
+                            ensure_node_stats(reviewed_node)
+                            success = reviewed_node.score is not None and not reviewed_node.is_buggy
+
+                            # Type narrowing for node.score to satisfy Mypy/Pyright
+                            score_val = reviewed_node.score
+
+                            if success and score_val is not None:
+                                if self.journal.score_min is None or score_val < self.journal.score_min:
+                                    self.journal.score_min = score_val
+                                if self.journal.score_max is None or score_val > self.journal.score_max:
+                                    self.journal.score_max = score_val
                             current_step = self.current_node_step
-                            node.metadata["pheromone_node"] = compute_node_pheromone(
-                                node,
+                            reviewed_node.metadata["pheromone_node"] = compute_node_pheromone(
+                                reviewed_node,
                                 current_step=current_step,
                                 score_min=self.journal.score_min,
                                 score_max=self.journal.score_max,
                             )
                             if success:
-                                for pid in node.parent_ids:
+                                for pid in reviewed_node.parent_ids:
                                     parent = self.journal.get_node(pid)
                                     if not parent:
                                         continue
                                     ensure_node_stats(parent)
                                     parent.metadata["success_count"] += 1
-                            log_msg("INFO", f"Pipeline updated Node {target_id} with score {node.score}")
+                            log_msg("INFO", f"Pipeline updated Node {target_id} with score {reviewed_node.score}")
                             log_msg(
                                 "INFO",
-                                f"[PHEROMONE-UPDATE] Node={node.id[:6]} "
-                                f"score={node.score} "
-                                f"pheromone={node.metadata.get('pheromone_node'):.4f}",
+                                f"[PHEROMONE-UPDATE] Node={reviewed_node.id[:6]} "
+                                f"score={reviewed_node.score} "
+                                f"pheromone={reviewed_node.metadata.get('pheromone_node'):.4f}",
                             )
                         else:
                             log_msg("WARNING", f"Review target node {target_id} not found.")

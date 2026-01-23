@@ -45,6 +45,8 @@ class CodeEmbeddingManager:
 
         if missing_texts:
             self._ensure_model()
+            if self._model is None:
+                raise RuntimeError("Failed to load SentenceTransformer model")
 
             embeddings = self._model.encode(
                 missing_texts,
@@ -52,6 +54,10 @@ class CodeEmbeddingManager:
                 show_progress_bar=False,
                 normalize_embeddings=True,
             )
+
+            # Ensure embeddings is a numpy array (encode can return list)
+            if not isinstance(embeddings, np.ndarray):
+                embeddings = np.array(embeddings)
 
             embeddings = embeddings.astype(np.float32)
 
@@ -63,12 +69,11 @@ class CodeEmbeddingManager:
                     cached_embeddings[i] = vec
                     idx += 1
 
-        result = np.vstack(cached_embeddings)
+        # Use cast or explicit check to satisfy Pyright about None values
+        import typing
+
+        result = np.vstack(typing.cast(list[np.ndarray], cached_embeddings))
         return result
-
-
-
-
 
 
 # """Utility for computing normalized code embeddings using Jina embeddings."""
