@@ -35,4 +35,11 @@ RUN conda run -n ${CONDA_ENV_NAME} conda install -y \
     conda clean -afy
 
 # put all the agent files in the expected location
+ENV HF_ENDPOINT=https://hf-mirror.com
+ENV MODEL_SAVE_PATH=${AGENT_DIR}/embedding-models/bge-m3
+RUN mkdir -p ${MODEL_SAVE_PATH}
+COPY scripts/download_model.py ${AGENT_DIR}/scripts/download_model.py
+RUN conda run -n ${CONDA_ENV_NAME} python ${AGENT_DIR}/scripts/download_model.py && \
+    chmod -R 555 ${MODEL_SAVE_PATH}
+
 COPY . ${AGENT_DIR}

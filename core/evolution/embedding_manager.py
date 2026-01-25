@@ -7,11 +7,14 @@ from __future__ import annotations
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+from utils.logger_system import log_msg
+
 
 class CodeEmbeddingManager:
     """Lazy-loading embedding manager for code snippets."""
 
     _model_name = "BAAI/bge-m3"
+    _local_model_path = "/home/agent/embedding-models/bge-m3"
     _model: SentenceTransformer | None = None
 
     def __init__(self) -> None:
@@ -21,7 +24,15 @@ class CodeEmbeddingManager:
     @classmethod
     def _ensure_model(cls) -> None:
         if cls._model is None:
-            cls._model = SentenceTransformer(cls._model_name)
+            import os
+
+            model_path = os.environ.get("LOCAL_MODEL_PATH", cls._local_model_path)
+            if os.path.exists(model_path):
+                log_msg("INFO", f"Loading embedding model from local path: {model_path}")
+                cls._model = SentenceTransformer(model_path)
+            else:
+                log_msg("INFO", f"Local model not found at {model_path}, downloading {cls._model_name}...")
+                cls._model = SentenceTransformer(cls._model_name)
             cls._model.eval()
 
     def embed_texts(self, texts: list[str]) -> np.ndarray:
