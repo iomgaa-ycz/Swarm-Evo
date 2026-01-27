@@ -251,7 +251,7 @@ class IterationController:
         """Gene Selection Logic"""
         if not self.use_pheromone_gene_selection:
             return None
-        log_msg("INFO", "[GENE-SELECT] Using pheromone + max-sim selection")
+        log_msg("INFO", "[GENE-SELECT] Using pheromone-based merge-only selection")
 
         try:
             self._update_gene_registry_from_journal()

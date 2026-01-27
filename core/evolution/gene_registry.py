@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 from typing import Any
 
@@ -86,14 +87,41 @@ class GeneRegistry:
             entry["source_node_id"] = node.id
 
     # gene_pool全集合构建
-    def get_gene_pheromone(self, locus: str, gene_id: str, default_init: float = 0.1) -> float:
+    def get_gene_pheromone(
+        self,
+        locus: str,
+        gene_id: str,
+        default_init: float = 0.1,
+        current_step: int | None = None,
+        decay_rate: float = 0.03,
+    ) -> float:
+        """
+        Return time-decayed gene pheromone.
+
+        pheromone_eff = pheromone * exp(-decay_rate * (current_step - last_seen_step))
+        """
         locus_entries = self._registry.get(locus)
         if not locus_entries:
             return default_init
+
         entry = locus_entries.get(gene_id)
         if not entry:
             return default_init
-        return float(entry.get("pheromone", default_init))
+
+        pheromone = float(entry.get("pheromone", default_init))
+
+        # 如果没有 step 信息，保持原行为（向后兼容）
+        if current_step is None:
+            return pheromone
+
+        last_seen_step = entry.get("last_seen_step", -1)
+        if last_seen_step < 0:
+            return pheromone
+
+        step_diff = max(0, current_step - last_seen_step)
+        decay = math.exp(-decay_rate * step_diff)
+
+        return pheromone * decay
 
     def build_gene_pools(self, journal: Journal | None = None) -> dict[str, list[dict[str, Any]]]:
         """Return gene pools for all loci."""
