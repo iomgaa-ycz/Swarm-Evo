@@ -115,6 +115,7 @@ class AgentEvolutionRecord:
     # 当前状态
     current_explore_version: str | None = None  # 当前explore版本ID
     current_merge_version: str | None = None  # 当前merge版本ID
+    current_bootstrap_version: str | None = None  # 当前bootstrap版本ID
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
@@ -148,6 +149,7 @@ class AgentVersionManager:
         "explore": "explore_user_prompt.j2",
         "merge": "merge_user_prompt.j2",
         "review": "evaluate_user_prompt.j2",
+        "bootstrap": "bootstrap_user_prompt.j2",
     }
     ACCURACY_WEIGHT = 0.6  # 准确率权重
     GENERATION_RATE_WEIGHT = 0.4  # 生成率权重
@@ -583,7 +585,7 @@ class AgentVersionManager:
 
         参数:
             agent_record: Agent进化记录
-            prompt_type: prompt类型 (explore/merge)
+            prompt_type: prompt类型 (explore/merge/bootstrap)
 
         返回:
             当前版本ID，如果不存在则返回None
@@ -592,6 +594,8 @@ class AgentVersionManager:
             return agent_record.current_explore_version
         elif prompt_type == "merge":
             return agent_record.current_merge_version
+        elif prompt_type == "bootstrap":
+            return agent_record.current_bootstrap_version
         return None
 
     def _set_current_version(self, agent_name: str, prompt_type: str, version_id: str) -> None:
@@ -600,13 +604,15 @@ class AgentVersionManager:
 
         参数:
             agent_name: Agent名称
-            prompt_type: prompt类型 (explore/merge)
+            prompt_type: prompt类型 (explore/merge/bootstrap)
             version_id: 版本ID
         """
         if prompt_type == "explore":
             self.agent_records[agent_name].current_explore_version = version_id
         elif prompt_type == "merge":
             self.agent_records[agent_name].current_merge_version = version_id
+        elif prompt_type == "bootstrap":
+            self.agent_records[agent_name].current_bootstrap_version = version_id
 
     async def _create_initial_version(self, agent_record: AgentEvolutionRecord, prompt_type: str) -> str:
         """

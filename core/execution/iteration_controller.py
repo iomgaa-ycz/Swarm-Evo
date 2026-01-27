@@ -63,6 +63,7 @@ class IterationController:
         "review": "evaluate_user_prompt.j2",
         "merge": "merge_user_prompt.j2",
         "explore": "explore_user_prompt.j2",
+        "bootstrap": "bootstrap_user_prompt.j2",
     }
 
     def __init__(
@@ -381,6 +382,8 @@ class IterationController:
         current_max_steps = agent.max_steps
         if task_type == "review":
             current_max_steps = 1
+        elif task_type == "bootstrap":
+            current_max_steps = 32
 
         agent_input_state = {
             "task_description": prepared_data["task_description"],
@@ -411,7 +414,7 @@ class IterationController:
         # 路由到具体的任务处理器
         if task_type == "review":
             await self._process_review_task(agent, task, execution_result)
-        elif task_type in ["explore", "merge"]:
+        elif task_type in ["explore", "merge", "bootstrap"]:
             await self._process_explore_merge_task(agent, task, execution_result)
         else:
             log_msg("WARNING", f"未知的任务类型: {task_type}")
@@ -427,8 +430,8 @@ class IterationController:
 
         log_msg("WARNING", f"任务失败: {task_type} (ID: {task_id}) by {agent.name}")
 
-        # explore/merge任务即使失败也要记录使用次数
-        if task_type in ["explore", "merge"]:
+        # explore/merge/bootstrap任务即使失败也要记录使用次数
+        if task_type in ["explore", "merge", "bootstrap"]:
             await self.version_manager.record_prompt_usage(agent.name, task_type)
 
         # 不创建节点、不归档文件
@@ -654,7 +657,20 @@ class IterationController:
             submission_validation=validation_result,
             parent_history=payload.get("parent_history"),
             template_name=payload.get("template_name"),
+            bootstrap_report=self._get_bootstrap_report(),
         )
+
+    def _get_bootstrap_report(self) -> str | None:
+        """
+        Get the specific Bootstrap Analysis Report from the journal.
+        
+        Searches for a node with action_type='bootstrap' and extracts its metadata.
+        """
+        # Iterate nodes to find bootstrap action
+        for node in self.journal.nodes.values():
+            if node.action_type == "bootstrap":
+                return node.metadata.get("bootstrap_report")
+        return None
 
     def _get_task_description(self, task: Task) -> str:
         """
@@ -724,7 +740,7 @@ class IterationController:
             logs = json.dumps([h.get("observation") for h in raw_session.history], ensure_ascii=False)
 
         # 策略1: 从history中提取solution.py的多个版本
-        if task["type"] in ["explore", "merge"] and raw_session:
+        if task["type"] in ["explore", "merge", "bootstrap"] and raw_session:
             history = raw_session.history
             seen_content = set()
 
@@ -782,6 +798,15 @@ class IterationController:
                                 "prompt_version_id": current_version_id,  # 保存当前prompt版本ID
                             },
                         )
+                        
+                        # [NEW] Persist Bootstrap Report to Metadata
+                        if task["type"] == "bootstrap":
+                            agent_output = execution_result.agent_output
+                            if isinstance(agent_output, dict):
+                                report_content = agent_output.get("content", "")
+                                if report_content:
+                                    node.metadata["bootstrap_report"] = report_content
+
                         nodes.append(node)
 
         # 策略2: Fallback到final agent output

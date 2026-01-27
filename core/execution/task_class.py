@@ -5,7 +5,7 @@ class Task(TypedDict):
     """任务定义"""
 
     id: str
-    type: str  # "explore", "merge", "review"
+    type: str  # "explore", "merge", "review", "bootstrap"
     priority: int  # 越高越优先
     payload: dict[str, Any]  # 任务上下文 (prompt params, parent nodes etc.)
     status: str  # "pending", "running", "completed", "failed"

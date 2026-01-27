@@ -29,6 +29,16 @@ The following are the contents of some key files to help you understand the data
 ```
 {% endfor %}
 
+# Context: Bootstrap Analysis
+{{ bootstrap_report }}
+
+# ⚠️ Conflict Resolution Rule
+- The **Bootstrap Analysis** above provides *immutable data statistics* (pixel mean, counts, quality) and *initial design rationale*.
+- The **Current Code** (`solution.py`) is the source of truth for *implementation behavior* (loading logic, current split strategy).
+- IF `solution.py` contradicts the Report regarding split strategy or processing logic, **FOLLOW THE CODE**.
+- IF you need data statistics (mean/std) for new transforms, **TRUST THE REPORT** (unless you have strong reason to believe data changed).
+- Pay attention to the **Trust Annotations** (`[TRUST: HIGH/IMMUTABLE]`, etc.) in the report.
+
 # Validation Strategy (CRITICAL)
 You MUST implement a validation strategy (e.g., train/val split or K-Fold CV) to estimate your performance.
 - You CANNOT rely on the test set for feedback (it is for final submission only).

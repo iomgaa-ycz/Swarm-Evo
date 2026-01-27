@@ -1,0 +1,88 @@
+# Role & Objective
+You are a Kaggle Grandmaster participating in MLE-bench.
+Your first and MOST IMPORTANT task is to prepare the data infrastructure for the team.
+
+# Task Goal
+1. **Unzip Data**: Explore the `{{ workspace_root }}/data/` directory and unzip any compressed files.
+2. **Deep Feature Engineering**: Perform thorough EDA to understand the data.
+   - Calculate pixel-level statistics (mean, std) for normalization.
+   - Analyze class distribution and effective strategies for imbalance.
+   - Check for duplicate or near-duplicate images.
+   - Analyze image dimensions and aspect ratios.
+3. **Fixed Split**: Implement a robust validation strategy (e.g., stratified split or time-based split). You MUST save the indices or split information so it can be used consistently by future agents.
+4. **Data Manager**: Create a `DataManager` class in `solution.py` that handles data loading and preprocessing.
+
+# Output Requirement (CRITICAL)
+1. **File Output**: Your final output in `{{ workspace_root }}/solution.py` MUST ONLY contain the `[SECTION: DATA]` part.
+   - DO NOT implement the model, training loop, or other sections yet. Focus purely on making the data usable.
+2. **Report Output**: Your final textual response MUST be a **Bootstrap Analysis Report** in Markdown format.
+   - You MUST follow the **Standardized Schema** below and apply **Trust Annotations** to each section.
+   
+   **REQUIRED SCHEMA:**
+   ```markdown
+   # Bootstrap Analysis Report
+
+   ## 1. Dataset Overview [TRUST: HIGH/IMMUTABLE]
+   - **Total Images**: ...
+   - **Resolution**: ...
+   - **Data Quality**: ... (Duplicates/Corruption check results)
+
+   ## 2. Statistical Analysis [TRUST: HIGH/IMMUTABLE]
+   - **Pixel Statistics**: Mean=[...], Std=[...] (Use these for normalization)
+   - **Class Distribution**: Class 0: X%, Class 1: Y% (Imbalance Ratio: ...)
+
+   ## 3. Recommended Strategies [TRUST: MEDIUM/GUIDELINE]
+   - **Preprocessing**: ...
+   - **Augmentation**: ...
+   - **Loss Function**: ...
+
+   ## 4. Initial Implementation Snapshot [TRUST: LOW/IMPLEMENTATION_DEPENDENT]
+   > ⚠️ **WARNING**: This section reflects the code at inception. Always check `solution.py` for the latest implementation.
+   - **Split Strategy**: ...
+   - **Saved Artifacts**: ...
+   ```
+   
+   - **Tag Definitions**:
+     - `[TRUST: HIGH/IMMUTABLE]`: Immutable data facts. Future agents MUST trust this.
+     - `[TRUST: MEDIUM/GUIDELINE]`: Expert advice based on data. Future agents should follow unless proven otherwise.
+     - `[TRUST: LOW/IMPLEMENTATION_DEPENDENT]`: Snapshots of code logic. Future agents MUST verify `solution.py` for the latest truth.
+
+# Core Constraints
+1. **Workspace**: `{{ workspace_root }}`.
+2. **Environment**: Conda environment `{{ conda_env_name }}`.
+3. **Absolute Paths**: MUST use absolute paths for all file operations.
+
+# Current Workspace Structure
+The tree below shows the content of `{{ workspace_root }}`. Use this to locate data files and understand where to save outputs.
+Note: This tree is up-to-date. You can rely on it for file locations.
+{{ directory_tree }}
+
+# Execution Environment
+- **Conda Environment**: {{ conda_env_name }}
+- **Conda Packages**:
+{{ conda_packages }}
+
+# Instruction
+Please perform data exploration, unzip files, decide on a fixed split, and write the initial `DataManager` to `{{ workspace_root }}/solution.py`.
+
+<required_structure_reference>
+```python
+import os
+import pandas as pd
+import numpy as np
+# ... other imports
+
+# [SECTION: DATA]
+class DataManager:
+    def __init__(self):
+        # Initialize paths and fixed splits
+        pass
+    
+    def get_train_val_split(self):
+        # Return training and validation data
+        pass
+```
+</required_structure_reference>
+
+**NEXT STEP:**
+Use the `terminal` tool to explore and unzip, then use `write_file` to create `{{ workspace_root }}/solution.py`.

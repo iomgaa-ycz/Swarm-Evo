@@ -31,12 +31,11 @@ class Pipeline:
 
     def initialize(self):
         """
-        初始化管道，添加初始的 explore 任务。
+        初始化管道，添加初始的 bootstrap 任务。
         """
         with self.lock:
-            log_msg("INFO", f"Initializing pipeline with {self.config.init_task_num} explore tasks.")
-            for _ in range(self.config.init_task_num):
-                self._add_task_internal(self._create_task("explore"))
+            log_msg("INFO", "Initializing pipeline with 1 bootstrap task.")
+            self._add_task_internal(self._create_task("bootstrap"))
 
     def _create_task(self, task_type: str, payload: dict[str, Any] | None = None) -> Task:
         """
@@ -207,7 +206,7 @@ class Pipeline:
             # --- Node Logic based on Task Type ---
             created_node_ids = []
 
-            if task["type"] in ["explore", "merge"]:
+            if task["type"] in ["explore", "merge", "bootstrap"]:
                 if result_nodes:
                     for node in result_nodes:
                         # 1. 递增全局 node 时间
@@ -299,6 +298,27 @@ class Pipeline:
                         self._prepend_task_internal(new_task)
                 else:
                     log_msg("WARNING", "Merge task completed without any result nodes. Skipping Review.")
+                    return
+
+            elif task["type"] == "bootstrap":
+                if created_node_ids:
+                    for nid in created_node_ids:
+                        payload_review = {
+                            "parent_id": task_id,
+                            "target_node_id": nid,
+                            "template_name": "evaluate_user_prompt.j2",
+                        }
+                        self._prepend_task_internal(self._create_task("review", payload_review))
+
+                        log_msg(
+                            "INFO",
+                            f"Bootstrap task {task_id} completed. Triggering {self.config.init_task_num} explore tasks.",
+                        )
+                        for _ in range(self.config.init_task_num):
+                            self._add_task_internal(self._create_task("explore", {"parent_id": nid}))
+
+                else:
+                    log_msg("ERROR", "Bootstrap task failed to create any result nodes.")
                     return
 
     def store_result(self, task_id: str, data: Any):

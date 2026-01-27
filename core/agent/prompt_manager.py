@@ -58,6 +58,7 @@ class PromptContext:
     solution_code: str | None = None
     execution_logs: str | None = None
     submission_validation: str | None = None
+    bootstrap_report: str | None = None
 
 
 class PromptManager:
@@ -263,6 +264,7 @@ class PromptManager:
             "solution_code": context.solution_code,
             "execution_logs": context.execution_logs,
             "submission_validation": context.submission_validation,
+            "bootstrap_report": context.bootstrap_report,
         }
 
     # ========================================================================
