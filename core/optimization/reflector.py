@@ -7,6 +7,7 @@
 3. 使用LLM分析prompt效果并提供改进建议
 """
 
+import json
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,7 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
 from core.agent.prompt_manager import PromptManager
 from core.optimization.version_manager import PromptVersionRecord
-from core.optimization.utils import LLMResponseParser, MessageBuilder, FileSaver
+from core.optimization.utils import MessageBuilder
 
 
 @dataclass
@@ -80,20 +81,15 @@ class PromptReflector:
         try:
             # 调用LLM生成反思建议
             response = await self.llm.ainvoke(messages)
-            response_content = LLMResponseParser.format_response_content(response)
+            response_content = response.content
 
-            # 解析响应
-            reflection_result = self._parse_reflection_response(response_content)
+            # 直接解析纯 JSON
+            reflection_result = json.loads(response_content)
 
             return reflection_result
 
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "suggestions": [],
-                "analysis": "反思器调用失败"
-            }
+            raise Exception(f"反思器调用失败: {e}")
 
     def _build_reflection_messages(
         self,
@@ -126,23 +122,6 @@ class PromptReflector:
             human_message="请基于以上数据分析这个prompt的表现，并提供具体的改进建议。"
         )
 
-    def _parse_reflection_response(self, response_content: str) -> Dict[str, Any]:
-        """
-        解析LLM的反思响应
-        """
-        data = LLMResponseParser.extract_json_from_response(response_content)
-
-        if data:
-            return data
-        else:
-            # 如果JSON解析失败，返回文本内容
-            return {
-                "success": True,
-                "suggestions": [],
-                "analysis": response_content,
-                "raw_response": response_content,
-                "parse_error": "JSON解析失败"
-            }
 
     async def analyze_version(
         self,

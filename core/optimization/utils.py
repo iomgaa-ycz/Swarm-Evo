@@ -20,30 +20,50 @@ class LLMResponseParser:
         """
         从LLM响应中提取JSON数据
 
-        支持以下格式：
-        1. ```json ... ```
-        2. ``` ... ```
-        3. 纯JSON
-
         参数:
-            response_content: LLM响应内容
+            response_content: LLM响应内容（预期为纯JSON字符串）
 
         返回:
             解析后的字典，解析失败返回None
+
+        注意：
+        - 现在要求 LLM 直接返回纯 JSON，不需要 markdown 代码块
+        - 保留兼容性逻辑：如果仍有代码块，会尝试提取
         """
+        import re
+
         try:
-            if "```json" in response_content:
-                json_start = response_content.find("```json") + 7
-                json_end = response_content.find("```", json_start)
-                json_str = response_content[json_start:json_end].strip()
+            # 去除前后空白
+            trimmed = response_content.strip()
+
+            # 如果响应以 { 开头，直接解析（预期情况）
+            if trimmed.startswith('{'):
+                return json.loads(trimmed)
+
+            # 兼容旧格式：尝试提取 ```json ... ``` 代码块
+            json_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+            matches = re.findall(json_pattern, trimmed, re.DOTALL)
+
+            if matches:
+                # 尝试第一个匹配的代码块
+                for match in matches:
+                    try:
+                        json_str = match.strip()
+                        parsed = json.loads(json_str)
+                        # 验证是否包含预期的键
+                        if any(key in parsed for key in ['diagnosis', 'suggestions', 'new_prompt']):
+                            return parsed
+                    except json.JSONDecodeError:
+                        continue
+
+            # 尝试找到第一个 { 和最后一个 }
+            first_brace = trimmed.find('{')
+            last_brace = trimmed.rfind('}')
+
+            if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                json_str = trimmed[first_brace:last_brace + 1]
                 return json.loads(json_str)
-            elif "```" in response_content:
-                json_start = response_content.find("```") + 3
-                json_end = response_content.find("```", json_start)
-                json_str = response_content[json_start:json_end].strip()
-                return json.loads(json_str)
-            else:
-                return json.loads(response_content)
+
         except (json.JSONDecodeError, ValueError):
             return None
 
