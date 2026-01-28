@@ -809,6 +809,53 @@ class IterationController:
 
                         nodes.append(node)
 
+
+        # 策略1.5: [Fallback] 如果历史记录中没有找到，尝试直接读取磁盘上的 solution.py
+        # 这处理了 Agent 使用 shell 命令 (如 cat, echo) 而非 write_file 工具的情况
+        if not nodes and task["type"] in ["explore", "merge", "bootstrap"]:
+            workspace_dir = self.config.mle_bench_workspace_dir
+            solution_path = os.path.join(workspace_dir, "solution.py")
+
+            if os.path.exists(solution_path):
+                try:
+                    with open(solution_path, "r", encoding="utf-8") as f:
+                        disk_content = f.read()
+
+                    if disk_content:
+                        log_msg("WARNING", "通过历史记录未找到代码，正在使用磁盘上的 solution.py 作为兜底 (Disk Fallback)")
+
+                        # 获取当前prompt版本ID
+                        current_prompt = self.version_manager.get_current_prompt(agent_name, task_type)
+                        current_version_id = current_prompt.version_id if current_prompt else None
+
+                        node = Node(
+                            parent_ids=parent_ids,
+                            code=disk_content,
+                            score=None,
+                            step=self.current_epoch,
+                            action_type=task["type"],
+                            logs=logs,  # 使用整体session logs
+                            metadata={
+                                "agent_name": execution_result.agent_name,
+                                "task_id": task["id"],
+                                "success": execution_result.success,
+                                "version": "disk_fallback",
+                                "prompt_version_id": current_version_id,
+                            },
+                        )
+
+                        # [NEW] Persist Bootstrap Report to Metadata (Retry logic)
+                        if task["type"] == "bootstrap":
+                            agent_output = execution_result.agent_output
+                            if isinstance(agent_output, dict):
+                                report_content = agent_output.get("content", "")
+                                if report_content:
+                                    node.metadata["bootstrap_report"] = report_content
+
+                        nodes.append(node)
+                except Exception as e:
+                    log_msg("WARNING", f"尝试读取磁盘上的 solution.py 失败: {e}")
+
         # 策略2: Fallback到final agent output
         if not nodes:
             agent_output = execution_result.agent_output
