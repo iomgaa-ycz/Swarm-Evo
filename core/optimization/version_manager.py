@@ -65,7 +65,7 @@ class PromptVersionRecord:
     prompt_type: str                                     # prompt类型 (explore/merge)
     prompt_content: str                                  # prompt内容
     created_at: str                                      # 创建时间 (ISO格式)
-    source: str                                          # 版本来源 (initial/generated/manual/learned)
+    source: str                                          # 版本来源 (initial/generated/learned)
 
     # 使用统计
     used_count: int = 0                                  # 该版本使用次数
@@ -239,7 +239,7 @@ class AgentVersionManager:
             version_id: 版本唯一标识
             prompt_type: prompt类型 (explore/merge)
             prompt_content: prompt内容
-            source: 版本来源 (initial/generated/manual/learned)
+            source: 版本来源 (initial/generated/learned)
             previous_version_id: 前一个版本ID
             crossover_source: 交叉来源信息 {"agent": "agent_1", "version_id": "explore_v2"}
 
@@ -292,85 +292,21 @@ class AgentVersionManager:
             start = time.time()
             agent_record = self.agent_records[agent_name]
 
-            # 获取当前版本ID
-            current_version_id = self._get_current_version_id(agent_record, prompt_type)
+            # 获取当前版本对象
+            version = self._find_current_version(agent_record, prompt_type)
 
             # 如果没有当前版本，创建初始版本
-            if not current_version_id:
-                current_version_id = await self._create_initial_version(agent_record, prompt_type)
+            if not version:
+                await self._create_initial_version(agent_record, prompt_type)
+                version = self._find_current_version(agent_record, prompt_type)
 
-            # 找到当前版本并增加使用次数
-            for version in agent_record.prompt_versions:
-                if version.version_id == current_version_id:
-                    version.used_count += 1
-                    agent_record.last_updated = datetime.now().isoformat()
-                    self._save_agent_record(agent_name)
-                    elapsed = time.time() - start
-                    log_msg("DEBUG", f"record_prompt_usage完成 {agent_name}，耗时 {elapsed:.3f}秒")
-                    return True
-
-            return False
-
-    async def record_task_execution(
-        self,
-        agent_name: str,
-        prompt_type: str,
-        task_id: str
-    ) -> bool:
-        """
-        记录任务执行（用于没有生成节点的情况）
-
-        创建一个空的TaskReviewRecord，node_metadata为空，
-        task_score=0.0, has_submission=False
-
-        参数:
-            agent_name: Agent名称
-            prompt_type: prompt类型 (explore/merge)
-            task_id: 任务ID
-
-        返回:
-            是否成功记录
-        """
-        # 确保Agent记录存在
-        if agent_name not in self.agent_records:
-            await self.register_agent(agent_name)
-
-        async with self.lock:
-            agent_record = self.agent_records[agent_name]
-
-            # 获取当前版本ID
-            current_version_id = self._get_current_version_id(agent_record, prompt_type)
-            if not current_version_id:
-                current_version_id = await self._create_initial_version(agent_record, prompt_type)
-
-            # 找到当前版本
-            for version in agent_record.prompt_versions:
-                if version.version_id == current_version_id:
-                    # 检查是否已有该task_id的记录
-                    for record in version.review_records:
-                        if record.task_id == task_id:
-                            # 已存在，不需要重复创建
-                            return True
-
-                    # 创建空的TaskReviewRecord
-                    num = len(version.review_records) + 1
-                    task_record = TaskReviewRecord(
-                        num=num,
-                        task_score=0.0,
-                        has_submission=False,
-                        task_id=task_id,
-                        node_metadata=[]
-                    )
-                    version.review_records.append(task_record)
-
-                    # 更新版本的综合评分
-                    self._calculate_version_score(version)
-
-                    # 保存
-                    agent_record.last_updated = datetime.now().isoformat()
-                    self._save_agent_record(agent_name)
-                    log_msg("INFO", f"已记录空任务执行: {agent_name} - {prompt_type} - task_id={task_id}")
-                    return True
+            if version:
+                version.used_count += 1
+                agent_record.last_updated = datetime.now().isoformat()
+                self._save_agent_record(agent_name)
+                elapsed = time.time() - start
+                log_msg("DEBUG", f"record_prompt_usage完成 {agent_name}，耗时 {elapsed:.3f}秒")
+                return True
 
             return False
 
@@ -379,9 +315,9 @@ class AgentVersionManager:
         agent_name: str,
         prompt_type: str,
         task_id: str,
-        node_id: str,
-        score: Optional[float],
-        has_submission: bool,
+        node_id: Optional[str] = None,
+        score: Optional[float] = None,
+        has_submission: bool = False,
         version_id: Optional[str] = None
     ) -> bool:
         """
@@ -391,13 +327,16 @@ class AgentVersionManager:
             agent_name: Agent名称
             prompt_type: prompt类型 (explore/merge)
             task_id: 关联的任务ID（explore/merge任务）
-            node_id: 关联的Node ID（被review的节点）
+            node_id: 关联的Node ID（被review的节点），如果为None则不创建节点记录
             score: review分数（可能为None）
             has_submission: 是否有提交
             version_id: 指定的版本ID（如果为None，使用当前版本）
 
         返回:
             是否成功记录
+
+        说明:
+            当 node_id 为 None 时，仅创建空的 TaskReviewRecord，不添加节点记录
         """
         # 确保Agent记录存在（在获取锁之前）
         if agent_name not in self.agent_records:
@@ -406,37 +345,40 @@ class AgentVersionManager:
         async with self.lock:
             agent_record = self.agent_records[agent_name]
 
-            # 使用指定的version_id，如果没有则使用当前版本ID
-            target_version_id = version_id
-            if not target_version_id:
-                target_version_id = self._get_current_version_id(agent_record, prompt_type)
+            # 确定目标版本对象
+            if version_id:
+                # 使用指定的version_id
+                version = self._find_version_by_id(agent_record, version_id)
+            else:
+                # 使用当前版本
+                version = self._find_current_version(agent_record, prompt_type)
 
             # 如果没有目标版本，创建初始版本
-            if not target_version_id:
-                target_version_id = await self._create_initial_version(agent_record, prompt_type)
+            if not version:
+                await self._create_initial_version(agent_record, prompt_type)
+                version = self._find_current_version(agent_record, prompt_type)
 
-            # 找到目标版本并添加review记录
-            for version in agent_record.prompt_versions:
-                if version.version_id == target_version_id:
-                    # 查找是否已有该task_id的记录
-                    task_record = None
-                    for record in version.review_records:
-                        if record.task_id == task_id:
-                            task_record = record
-                            break
+            if version:
+                # 查找是否已有该task_id的记录
+                task_record = None
+                for record in version.review_records:
+                    if record.task_id == task_id:
+                        task_record = record
+                        break
 
-                    # 如果没有该task_id的记录，创建新的TaskReviewRecord
-                    if not task_record:
-                        num = len(version.review_records) + 1
-                        task_record = TaskReviewRecord(
-                            num=num,
-                            task_score=0.0,
-                            has_submission=False,
-                            task_id=task_id
-                        )
-                        version.review_records.append(task_record)
+                # 如果没有该task_id的记录，创建新的TaskReviewRecord
+                if not task_record:
+                    num = len(version.review_records) + 1
+                    task_record = TaskReviewRecord(
+                        num=num,
+                        task_score=0.0,
+                        has_submission=False,
+                        task_id=task_id
+                    )
+                    version.review_records.append(task_record)
 
-                    # 创建NodeMetadata并添加到任务记录
+                # 只有当 node_id 不为 None 时才创建并添加 NodeMetadata
+                if node_id is not None:
                     node_metadata = NodeMetadata(
                         score=score,
                         has_submission=has_submission,
@@ -445,18 +387,18 @@ class AgentVersionManager:
                     )
                     task_record.node_metadata.append(node_metadata)
 
-                    # 更新任务级别的聚合指标
-                    self._update_task_record_metrics(task_record)
+                # 更新任务级别的聚合指标
+                self._update_task_record_metrics(task_record)
 
-                    # 更新版本的综合评分
-                    self._calculate_version_score(version)
+                # 更新版本的综合评分
+                self._calculate_version_score(version)
 
-                    # 更新时间戳并保存
-                    agent_record.last_updated = datetime.now().isoformat()
-                    self._save_agent_record(agent_name)
-                    return True
+                # 更新时间戳并保存
+                agent_record.last_updated = datetime.now().isoformat()
+                self._save_agent_record(agent_name)
+                return True
 
-            log_msg("WARNING", f"未找到目标版本 {target_version_id} for {agent_name}")
+            log_msg("WARNING", f"未找到目标版本 for {agent_name}")
             return False
 
     def _calculate_version_score(self, version: PromptVersionRecord) -> None:
@@ -574,51 +516,60 @@ class AgentVersionManager:
         if not agent_record:
             return None
 
-        version_id = self._get_current_version_id(agent_record, prompt_type)
-        if not version_id:
-            return None
+        return self._find_current_version(agent_record, prompt_type)
 
-        # 查找对应的版本
-        for version in agent_record.prompt_versions:
-            if version.version_id == version_id:
-                return version
-
-        return None
-
-    def get_current_prompt_usage_count(self, agent_name: str, prompt_type: str) -> int:
-        """
-        获取当前prompt的使用次数
-
-        参数:
-            agent_name: Agent名称
-            prompt_type: prompt类型 (explore/merge)
-
-        返回:
-            使用次数，如果不存在返回0
-        """
-        current_version = self.get_current_prompt(agent_name, prompt_type)
-        if not current_version:
-            return 0
-
-        return current_version.used_count
 
     # ==================== 私有辅助方法 ====================
 
-    def _get_current_version_id(self, agent_record: AgentEvolutionRecord, prompt_type: str) -> Optional[str]:
+    def _find_current_version(
+        self,
+        agent_record: AgentEvolutionRecord,
+        prompt_type: str
+    ) -> Optional[PromptVersionRecord]:
         """
-        获取Agent当前版本的ID
+        查找当前版本对象（直接返回，不创建）
+
+        用于内部方法（已有agent_record），避免重复遍历
 
         参数:
             agent_record: Agent进化记录
             prompt_type: prompt类型 (explore/merge)
 
         返回:
-            当前版本ID，如果不存在则返回None
+            PromptVersionRecord对象，如果不存在则返回None
         """
+        # 获取当前版本ID
         if prompt_type == "explore":
-            return agent_record.current_explore_version
+            version_id = agent_record.current_explore_version
         elif prompt_type == "merge":
-            return agent_record.current_merge_version
+            version_id = agent_record.current_merge_version
+        else:
+            return None
+
+        if not version_id:
+            return None
+
+        # 查找并返回对象
+        return self._find_version_by_id(agent_record, version_id)
+
+    def _find_version_by_id(
+        self,
+        agent_record: AgentEvolutionRecord,
+        version_id: str
+    ) -> Optional[PromptVersionRecord]:
+        """
+        根据版本ID查找版本对象
+
+        参数:
+            agent_record: Agent进化记录
+            version_id: 版本ID
+
+        返回:
+            PromptVersionRecord对象，如果不存在则返回None
+        """
+        for version in agent_record.prompt_versions:
+            if version.version_id == version_id:
+                return version
         return None
 
     def _set_current_version(self, agent_name: str, prompt_type: str, version_id: str) -> None:
