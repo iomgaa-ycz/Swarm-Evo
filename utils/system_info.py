@@ -90,7 +90,8 @@ def get_gpu_info() -> str | None:
     )
 
     if result.returncode != 0:
-        log_msg("ERROR", f"nvidia-smi command failed with return code {result.returncode}: {result.stderr}")
+        log_msg("WARNING", "nvidia-smi unavailable, skipping GPU info")
+        return "GPU info unavailable"
 
     if not result.stdout.strip():
         # 如果没有输出，可能表示没有检测到GPU，或者确实没有GPU。
