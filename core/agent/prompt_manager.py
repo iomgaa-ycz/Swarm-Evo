@@ -63,7 +63,7 @@ class PromptContext:
 
 class PromptManager:
     """
-    提示词管理器，负责拼接动态补充信息与模板注入。
+    提示词管理器，负责拼接动态补充信息与模板注入。task description
 
     重构后的核心变化：
     - build_system_message(): 返回 SystemMessage 对象

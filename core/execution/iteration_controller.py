@@ -85,6 +85,8 @@ class IterationController:
         self.current_epoch = 0
         self.start_time = time.time()
 
+        self._cached_data_profile: dict[str, Any] | None = None
+
         # Gene Selection
         self.use_pheromone_gene_selection = config.use_pheromone_gene_selection
         self.gene_registry = GeneRegistry()
@@ -390,6 +392,12 @@ class IterationController:
             "prompt_context": prepared_data["prompt_context"],
             "max_steps": current_max_steps,
         }
+        td = prepared_data["task_description"]
+        log_msg(
+            "INFO",
+            f"[AGENT_INPUT] task_description length={len(td)}, "
+            f"contains 'Data Profile'={('Data Profile' in td)}"
+        )
 
         result = await agent(agent_input_state)
 
@@ -672,27 +680,52 @@ class IterationController:
                 return node.metadata.get("bootstrap_report")
         return None
 
+    def _get_data_profile(self) -> dict[str, Any]:
+        """
+        Lazily build and cache data_profile (competition-level, immutable).
+        """
+        if self._cached_data_profile is None:
+            log_msg("INFO", "[DATA_PROFILE] cache miss → building data_profile")
+            from core.data_profile import DataProfileBuilder
+            builder = DataProfileBuilder(self.config.mle_bench_workspace_dir)
+            self._cached_data_profile = builder.build()
+            log_msg(
+            "INFO",
+            f"[DATA_PROFILE] build finished, keys={list(self._cached_data_profile.keys())}"
+        )
+        else:
+            log_msg("INFO", "[DATA_PROFILE] cache hit → reuse cached data_profile")
+        
+        return self._cached_data_profile
+
     def _get_task_description(self, task: Task) -> str:
         """
-        生成任务描述
+        生成任务描述，将data_profile拼接其中
 
-        基于任务类型生成人类可读的任务描述，并添加竞赛背景
+        基于任务类型生成人类可读的任务描述，并添加竞赛背景与data_profile
         """
         t_type = task["type"]
+        log_msg("INFO", f"[DATA_PROFILE] building task_description for task={t_type}")
 
         task_instructions = {
             "explore": "Please explore a new solution based on the plan.",
             "merge": "Please merge the selected strategies into a new solution.",
             "review": "Please review the solution and provide feedback.",
+            "bootstrap": "Please analyze the dataset and propose a strong baseline plan.",
         }
-
         task_instruction = task_instructions.get(t_type, f"Execute task of type {t_type}")
 
-        # 添加竞赛背景
-        if self.competition_description:
-            return f"# Competition Background\n{self.competition_description}\n\n---\n\n# Your Task\n{task_instruction}"
+        # only data_profile
+        data_profile = self._get_data_profile()
+        from core.data_profile import render_data_profile_text
+        data_profile_text = render_data_profile_text(data_profile)
 
-        return task_instruction
+        return (
+            f"{data_profile_text}\n\n"
+            f"---\n\n"
+            f"# Your Task\n"
+            f"{task_instruction}"
+        )
 
     def _create_nodes_from_result(
         self, execution_result: TaskExecutionResult, task: Task, agent_name: str
